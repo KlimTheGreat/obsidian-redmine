@@ -3,15 +3,34 @@
 
 import DOMPurify from 'dompurify';
 
-type DomElementInfo = { text?: string; cls?: string };
+type DomElementInfo = { text?: string; cls?: string; attr?: Record<string, string> };
 
 declare global {
 	interface HTMLElement {
 		empty(): void;
 		createEl<K extends keyof HTMLElementTagNameMap>(tag: K, o?: DomElementInfo): HTMLElementTagNameMap[K];
 		createDiv(o?: DomElementInfo): HTMLDivElement;
+		createSpan(o?: DomElementInfo): HTMLSpanElement;
 	}
+	interface Node {
+		appendText(text: string): void;
+	}
+	function createSpan(o?: DomElementInfo): HTMLSpanElement;
 }
+
+function buildEl<K extends keyof HTMLElementTagNameMap>(tag: K, o?: DomElementInfo): HTMLElementTagNameMap[K] {
+	const el = document.createElement(tag);
+	if (o?.text !== undefined) el.textContent = o.text;
+	if (o?.cls) el.className = o.cls;
+	for (const [name, value] of Object.entries(o?.attr ?? {})) el.setAttribute(name, value);
+	return el;
+}
+
+globalThis.createSpan = (o?: DomElementInfo) => buildEl('span', o);
+
+Node.prototype.appendText = function (this: Node, text: string) {
+	this.appendChild(document.createTextNode(text));
+};
 
 HTMLElement.prototype.empty = function (this: HTMLElement) {
 	this.replaceChildren();
@@ -22,15 +41,15 @@ HTMLElement.prototype.createEl = function <K extends keyof HTMLElementTagNameMap
 	tag: K,
 	o?: DomElementInfo,
 ): HTMLElementTagNameMap[K] {
-	const el = document.createElement(tag);
-	if (o?.text !== undefined) el.textContent = o.text;
-	if (o?.cls) el.className = o.cls;
-	this.appendChild(el);
-	return el;
+	return this.appendChild(buildEl(tag, o));
 };
 
 HTMLElement.prototype.createDiv = function (this: HTMLElement, o?: DomElementInfo): HTMLDivElement {
 	return this.createEl('div', o);
+};
+
+HTMLElement.prototype.createSpan = function (this: HTMLElement, o?: DomElementInfo): HTMLSpanElement {
+	return this.createEl('span', o);
 };
 
 // Same DOMPurify setup as Obsidian 1.14 (config and hook copied from app.js), so tests see the app's stripping.
@@ -83,8 +102,26 @@ export class Workspace {
 	}
 }
 
+export class Vault {
+	/** Files that exist in the test vault; tests push into it. */
+	files: TFile[] = [];
+	getResourcePath(file: TFile): string {
+		return `app://vault/${file.path}`;
+	}
+}
+
+export class MetadataCache {
+	constructor(private vault: Vault) {}
+	// Real one resolves like a wikilink; the mock matches the full path or the file name.
+	getFirstLinkpathDest(linkpath: string, _sourcePath: string): TFile | null {
+		return this.vault.files.find((f) => f.path === linkpath || f.path.split('/').pop() === linkpath) ?? null;
+	}
+}
+
 export class App {
 	workspace = new Workspace();
+	vault = new Vault();
+	metadataCache = new MetadataCache(this.vault);
 }
 
 export interface ViewStateResult {

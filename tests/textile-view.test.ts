@@ -88,7 +88,7 @@ describe('TextileView', () => {
 		const view = makeView();
 		view.setViewData('<script>window.pwned = 1</script>\n\n<img src="x" onerror="alert(1)">\n\n"bad":javascript:alert(1)', true);
 		expect(view.contentEl.querySelector('script')).toBeNull();
-		expect(view.contentEl.querySelector('img')?.hasAttribute('onerror')).toBe(false);
+		expect(view.contentEl.querySelector('[onerror]')).toBeNull();
 		expect(view.contentEl.querySelector('a')?.hasAttribute('href')).toBe(false);
 	});
 
@@ -313,5 +313,27 @@ describe('TextileView mode memory', () => {
 		expect(view.mode).toBe('preview');
 		await view.setState(null, { history: false });
 		expect(view.mode).toBe('preview');
+	});
+});
+
+describe('TextileView Redmine markup', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('shows an image from the vault next to the draft', () => {
+		const view = makeView();
+		view.file = new TFile('Oggetto/Prosv/273318/comments/273318-итоги.textile');
+		view.app.vault.files.push(new TFile('Oggetto/Prosv/273318/скрин.png'));
+		open(view, '!скрин.png!');
+		expect(preview(view)?.querySelector('img')?.getAttribute('src')).toBe('app://vault/Oggetto/Prosv/273318/скрин.png');
+	});
+
+	it('shows a placeholder when the name points to a file that is not an image', () => {
+		const view = makeView();
+		view.app.vault.files.push(new TFile('notes/скрин.png.md'), new TFile('notes/план.textile'));
+		open(view, '!план.textile!');
+		expect(preview(view)?.querySelector('img')).toBeNull();
+		expect(preview(view)?.querySelector('.redmine-attachment')?.textContent).toBe('план.textile');
 	});
 });

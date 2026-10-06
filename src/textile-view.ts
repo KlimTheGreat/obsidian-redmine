@@ -1,8 +1,12 @@
 import { sanitizeHTMLToDom, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_TEXTILE } from './constants';
+import { enhancePreview } from './preview';
 import { renderTextile } from './render';
 
 export type TextileMode = 'preview' | 'source';
+
+// Image types Obsidian can display; any other file found by name is not an image.
+const IMAGE_EXTENSIONS = ['avif', 'bmp', 'gif', 'jpe', 'jpeg', 'jpg', 'png', 'svg', 'webp'];
 
 /** View for .textile files: rendered preview or editable source, switched from the tab header. */
 export class TextileView extends TextFileView {
@@ -112,8 +116,17 @@ export class TextileView extends TextFileView {
 	private renderPreview(): void {
 		const preview = this.contentEl.createDiv({ cls: 'redmine-textile-preview markdown-rendered' });
 		// Parsed HTML only through Obsidian's sanitizer: drafts may hold raw <script>, on* handlers, javascript: links.
-		preview.append(sanitizeHTMLToDom(renderTextile(this.data)));
+		const content = sanitizeHTMLToDom(renderTextile(this.data));
+		enhancePreview(content, { resolveImage: (name) => this.resolveImage(name) });
+		preview.append(content);
 		preview.addEventListener('click', onPreviewClick);
+	}
+
+	// An attachment name is looked up like a wikilink from this file: next to it first, then anywhere in the vault.
+	private resolveImage(name: string): string | null {
+		const file = this.app.metadataCache.getFirstLinkpathDest(name, this.file?.path ?? '');
+		if (!file || !IMAGE_EXTENSIONS.includes(file.extension.toLowerCase())) return null;
+		return this.app.vault.getResourcePath(file);
 	}
 
 	private renderSource(): void {
