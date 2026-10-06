@@ -38,6 +38,7 @@ Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `tex
 
 ## Rules
 
+- Language: reply to the owner in English, and write plans, commits and repo docs in English. Existing Russian vault notes stay Russian; additions to them follow the note's language.
 - `id` is `redmine` and must never change: it becomes the users' plugin folder name, and catalog ids can't contain `obsidian`. The display name `Redmine` doesn't contain "Obsidian" either.
 - The view never alters file content on its own. `getViewData()` returns exactly what it got, byte for byte, including BOM, `\r\n` and trailing whitespace, because closing the tab writes it to disk.
 - File text reaches the DOM only as text (`text`/`textContent`). Parsed HTML goes through `sanitizeHTMLToDom`, never `innerHTML`.
@@ -58,7 +59,7 @@ Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `tex
 
 ## Obsidian vault: project knowledge base
 
-Project notes live in the vault at `~/Dropbox/Second Brain/Projects/obsidian-redmine/`. They're plain markdown, so read and write them with the normal file tools. **Before reading or writing any note, read `~/Dropbox/Second Brain/Projects/CLAUDE.md`**: it defines folder layout, file names and frontmatter. The entry point is `Projects/obsidian-redmine/obsidian-redmine.md` (stages, analysis, doc links). Stage plans are in `plans/`, named `obsidian-redmine-NN-<name>`. Record each stage's results in the main note's `## Итоги` section.
+Project notes live in the vault at `~/Dropbox/Second Brain/Projects/obsidian-redmine/`. They're plain markdown, so read and write them with the normal file tools. Move, rename and delete notes only via the Obsidian CLI (`obsidian vault="Second Brain" move path="…" to="…"`) so links stay intact; if it fails (Obsidian not running), stop and tell me, never `mv`/`rm` notes. **Before reading or writing any note, read `~/Dropbox/Second Brain/Projects/CLAUDE.md`**: it defines folder layout, file names and frontmatter. The entry point is `Projects/obsidian-redmine/obsidian-redmine.md` (stages, analysis, doc links). Stage plans are in `plans/`, named `obsidian-redmine-NN-<name>`. Record each stage's results in the main note's `## Итоги` section.
 
 - Real test data: about 10 drafts at `~/Dropbox/Second Brain/Oggetto/Prosv/*/comments/*.textile`. After manual testing, check with `git -C "<vault>" status --short Oggetto` that the plugin didn't modify any of them.
 - The vault is its own git repo. `.obsidian/plugins/redmine/` must be in the vault's `.gitignore`. After vault changes, commit the vault with `git add` on specific paths.
