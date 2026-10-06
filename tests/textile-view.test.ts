@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TFile, WorkspaceLeaf } from 'obsidian';
+import { prism, TFile, WorkspaceLeaf } from 'obsidian';
 import { TextileView } from '../src/textile-view';
 import { VIEW_TYPE_TEXTILE } from '../src/constants';
 
@@ -335,5 +335,13 @@ describe('TextileView Redmine markup', () => {
 		open(view, '!план.textile!');
 		expect(preview(view)?.querySelector('img')).toBeNull();
 		expect(preview(view)?.querySelector('.redmine-attachment')?.textContent).toBe('план.textile');
+	});
+
+	it('highlights code blocks with Prism', async () => {
+		prism.highlighted.length = 0;
+		const view = makeView();
+		open(view, '<pre><code class="sql">\nSELECT 1;\n</code></pre>');
+		await vi.waitFor(() => expect(prism.highlighted).toHaveLength(1));
+		expect(prism.highlighted[0]).toBe(preview(view)?.querySelector('code.language-sql'));
 	});
 });

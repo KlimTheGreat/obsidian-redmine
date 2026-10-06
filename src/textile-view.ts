@@ -1,6 +1,6 @@
 import { sanitizeHTMLToDom, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_TEXTILE } from './constants';
-import { enhancePreview } from './preview';
+import { enhancePreview, highlightCode } from './preview';
 import { renderTextile } from './render';
 
 export type TextileMode = 'preview' | 'source';
@@ -120,6 +120,7 @@ export class TextileView extends TextFileView {
 		enhancePreview(content, { resolveImage: (name) => this.resolveImage(name) });
 		preview.append(content);
 		preview.addEventListener('click', onPreviewClick);
+		highlightCode(preview).catch((error) => console.error('Redmine: could not highlight code', error));
 	}
 
 	// An attachment name is looked up like a wikilink from this file: next to it first, then anywhere in the vault.

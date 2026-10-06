@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { sanitizeHTMLToDom } from 'obsidian';
-import { enhancePreview, PreviewContext } from '../src/preview';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { prism, sanitizeHTMLToDom } from 'obsidian';
+import { enhancePreview, highlightCode, PreviewContext } from '../src/preview';
 import { renderTextile } from '../src/render';
 
 const noImages: PreviewContext = { resolveImage: () => null };
@@ -71,5 +71,30 @@ describe('enhancePreview issue references', () => {
 
 	it('ignores # inside words, URLs and numbers followed by letters', () => {
 		expect(refs(show('a#1 http://x.y/#2 #3abc #4.5'))).toEqual([]);
+	});
+});
+
+describe('enhancePreview code blocks', () => {
+	it('gives Prism the language class and drops the newlines around the code', () => {
+		const code = show('<pre><code class="sql">\nSELECT 1;\n</code></pre>').querySelector('pre > code');
+		expect(code?.classList.contains('language-sql')).toBe(true);
+		expect(code?.textContent).toBe('SELECT 1;');
+	});
+
+	it('leaves code without a language without a language class', () => {
+		const code = show('<pre><code>\nx\n</code></pre>').querySelector('pre > code');
+		expect(code?.className).toBe('');
+	});
+});
+
+describe('highlightCode', () => {
+	beforeEach(() => {
+		prism.highlighted.length = 0;
+	});
+
+	it('highlights code blocks that have a language, including inside a collapse', async () => {
+		const root = show('{{collapse(SQL)\n<pre><code class="sql">\nSELECT 1;\n</code></pre>\n}}\n\n<pre>plain</pre>');
+		await highlightCode(root);
+		expect(prism.highlighted).toEqual([root.querySelector('code.language-sql')]);
 	});
 });

@@ -124,6 +124,18 @@ export class App {
 	metadataCache = new MetadataCache(this.vault);
 }
 
+// Stands in for Obsidian's bundled Prism: records which elements it was asked to highlight.
+export const prism = {
+	highlighted: [] as Element[],
+	highlightElement(element: Element): void {
+		this.highlighted.push(element);
+	},
+};
+
+export async function loadPrism(): Promise<typeof prism> {
+	return prism;
+}
+
 export interface ViewStateResult {
 	history: boolean;
 }

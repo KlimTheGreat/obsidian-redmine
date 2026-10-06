@@ -1,8 +1,12 @@
-import { setIcon } from 'obsidian';
+import { loadPrism, setIcon } from 'obsidian';
 
 export interface PreviewContext {
 	/** Attachment name from `!name!` or {{thumbnail(name)}} → a loadable URL, or null if there's no such image. */
 	resolveImage(name: string): string | null;
+}
+
+interface Prism {
+	highlightElement(element: Element): void;
 }
 
 const URL_SCHEME_RE = /^([a-z][a-z\d+.-]*:|\/\/)/i;
@@ -14,6 +18,15 @@ const ISSUE_RE = /(^|[\s(,\-[>])(!)?(##?\d+(?:(?:#note)?-\d+)?)(?=[\p{P}\p{S}](?
 export function enhancePreview(root: DocumentFragment, context: PreviewContext): void {
 	resolveImages(root, context);
 	markIssueRefs(root);
+	prepareCodeBlocks(root);
+}
+
+/** Colours code blocks with Obsidian's own Prism, like fenced code in notes. */
+export async function highlightCode(root: HTMLElement): Promise<void> {
+	const blocks = root.querySelectorAll('pre > code[class*="language-"]');
+	if (blocks.length === 0) return;
+	const prism = (await loadPrism()) as Prism;
+	blocks.forEach((code) => prism.highlightElement(code));
 }
 
 // In Redmine `!name.png!` and {{thumbnail}} name an attachment of the issue. Here the name is looked up in the vault;
@@ -57,5 +70,15 @@ function markIssueRefs(root: DocumentFragment): void {
 		if (last === 0) continue;
 		parts.push(text.slice(last));
 		node.replaceWith(...parts);
+	}
+}
+
+// Redmine writes `<pre><code class="sql">`; Prism wants `language-sql`. The newlines right inside <code> are
+// part of the textile markup, not of the code.
+function prepareCodeBlocks(root: DocumentFragment): void {
+	for (const code of Array.from(root.querySelectorAll('pre > code'))) {
+		code.textContent = (code.textContent ?? '').replace(/^\n/, '').replace(/\n$/, '');
+		const language = code.classList[0];
+		if (language && !language.startsWith('language-')) code.classList.add(`language-${language}`);
 	}
 }
