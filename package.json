@@ -21,15 +21,19 @@
 	"devDependencies": {
 		"@eslint/js": "^9.39.4",
 		"@types/node": "^22.15.17",
+		"dompurify": "^3.4.16",
 		"esbuild": "0.25.5",
 		"eslint": "^9.39.4",
 		"eslint-plugin-obsidianmd": "^0.4.0",
 		"globals": "^17.6.0",
 		"jiti": "^2.6.1",
 		"jsdom": "^26.1.0",
-		"obsidian": "latest",
+		"obsidian": "^1.12.3",
 		"typescript": "^5.8.3",
 		"typescript-eslint": "^8.59.1",
 		"vitest": "^4.1.11"
+	},
+	"dependencies": {
+		"textile-js": "2.1.1"
 	}
 }

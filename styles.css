@@ -1,9 +1,43 @@
-/* Same font as the markdown editor: monospace at the base size looked oversized next to notes. */
+/* Layout and type follow Obsidian's own note views (.markdown-preview-view / .cm-scroller in app.css):
+   the padding moves from .view-content to each mode, so both modes sit where note text does. */
+.workspace-leaf-content[data-type='redmine-textile'] .view-content {
+	padding: 0;
+}
+
+.redmine-textile-preview,
 .redmine-textile-source {
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	padding: var(--file-margins);
+	overflow-y: auto;
+	font-family: var(--font-text);
+	font-size: var(--font-preferred-size);
+	line-height: var(--line-height-normal);
+	color: var(--text-normal);
+}
+
+.redmine-textile-preview {
+	overflow-wrap: break-word;
+	user-select: text;
+}
+
+.redmine-textile-source {
+	display: block;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	background: transparent;
+	resize: none;
 	white-space: pre-wrap;
 	word-break: break-word;
-	font-family: var(--font-text);
-	font-size: var(--font-text-size);
-	line-height: var(--line-height-normal);
-	user-select: text;
+}
+
+/* Obsidian's global textarea styles add a border and focus ring; the source should look like the note editor. */
+.redmine-textile-source:hover,
+.redmine-textile-source:focus {
+	border: none;
+	box-shadow: none;
+	outline: none;
+	background: transparent;
 }
