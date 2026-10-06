@@ -106,19 +106,33 @@ export class TextileView extends TextFileView {
 	}
 
 	private render(): void {
+		// Re-rendering the preview (a change on disk) keeps open collapses open: they're matched by position.
+		const opened = Array.from(this.contentEl.querySelectorAll('details'), (details) => details.open);
 		this.contentEl.empty();
 		this.editor = null;
 		this.shown = this.data;
 		if (this.mode === 'source') this.renderSource();
-		else this.renderPreview();
+		else this.renderPreview(opened);
 	}
 
-	private renderPreview(): void {
+	private renderPreview(opened: boolean[]): void {
 		const preview = this.contentEl.createDiv({ cls: 'redmine-textile-preview markdown-rendered' });
+		let html: string;
+		try {
+			html = renderTextile(this.data);
+		} catch (error) {
+			// textile-js throws on some input (e.g. a NUL character); the source mode still shows the file.
+			console.error('Redmine: could not render textile', error);
+			preview.createEl('p', { cls: 'redmine-render-error', text: 'This file could not be rendered. Switch to source to see and edit it.' });
+			return;
+		}
 		// Parsed HTML only through Obsidian's sanitizer: drafts may hold raw <script>, on* handlers, javascript: links.
-		const content = sanitizeHTMLToDom(renderTextile(this.data));
+		const content = sanitizeHTMLToDom(html);
 		enhancePreview(content, { resolveImage: (name) => this.resolveImage(name) });
 		preview.append(content);
+		preview.querySelectorAll('details').forEach((details, i) => {
+			if (opened[i]) details.open = true;
+		});
 		preview.addEventListener('click', onPreviewClick);
 		highlightCode(preview).catch((error) => console.error('Redmine: could not highlight code', error));
 	}

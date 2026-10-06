@@ -344,4 +344,45 @@ describe('TextileView Redmine markup', () => {
 		await vi.waitFor(() => expect(prism.highlighted).toHaveLength(1));
 		expect(prism.highlighted[0]).toBe(preview(view)?.querySelector('code.language-sql'));
 	});
+
+	it('keeps open collapses open when the file changes on disk', () => {
+		const view = makeView();
+		open(view, '{{collapse(A)\na\n}}\n\n{{collapse(B)\nb\n}}');
+		preview(view)!.querySelectorAll('details')[1]!.open = true;
+		changeOnDisk(view, '{{collapse(A)\na\n}}\n\n{{collapse(B)\nb, edited\n}}');
+		const details = preview(view)!.querySelectorAll('details');
+		expect([details[0]!.open, details[1]!.open]).toEqual([false, true]);
+		expect(details[1]!.textContent).toContain('b, edited');
+	});
+
+	it('opens collapses closed after switching back from source', () => {
+		const view = makeView();
+		open(view, '{{collapse(A)\na\n}}');
+		preview(view)!.querySelector('details')!.open = true;
+		view.setMode('source');
+		view.setMode('preview');
+		expect(preview(view)!.querySelector('details')!.open).toBe(false);
+	});
+
+	it('shows a message instead of failing when the parser throws, and keeps the data', () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const view = makeView();
+		// textile-js throws on a NUL character (TypeError inside the parser).
+		const text = 'a' + String.fromCharCode(0) + 'b';
+		open(view, text);
+		expect(preview(view)?.querySelector('.redmine-render-error')?.textContent).toContain('could not be rendered');
+		expect(error).toHaveBeenCalled();
+		expect(view.getViewData()).toBe(text);
+		view.setMode('source');
+		expect(editor(view)?.value).toBe(text);
+	});
+
+	it('clicking a collapse title does not count as a link click', () => {
+		const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+		const view = makeView();
+		view.setViewData('{{collapse(A)\na\n}}', true);
+		const evt = click(preview(view)!.querySelector('summary')!);
+		expect(evt.defaultPrevented).toBe(false);
+		expect(open).not.toHaveBeenCalled();
+	});
 });
