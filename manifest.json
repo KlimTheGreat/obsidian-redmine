@@ -3,7 +3,7 @@
 	"name": "Redmine",
 	"version": "0.1.0",
 	"minAppVersion": "1.1.0",
-	"description": "Open Redmine textile files (.textile) in Obsidian.",
+	"description": "View and edit Redmine textile files (.textile) in Obsidian.",
 	"author": "Klim Iashchenko",
 	"isDesktopOnly": false
 }

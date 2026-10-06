@@ -16,11 +16,17 @@ Obsidian community plugin **Redmine**: view and edit Redmine `.textile` files (c
 ## Architecture
 
 - `src/main.ts`: `RedminePlugin` calls `registerView(VIEW_TYPE_TEXTILE, …)` and `registerExtensions(['textile'], VIEW_TYPE_TEXTILE)`. If another plugin already owns `.textile`, `registerExtensions` throws. The plugin catches the error, shows a `Notice` and keeps loading. Obsidian unregisters both calls on unload, so there's no `onunload`.
-- `src/textile-view.ts`: `TextileView extends TextFileView`. Obsidian reads the file and passes the text to `setViewData(data, clear)`, where `clear: true` means a different file was opened in the same leaf. On close, Obsidian writes `getViewData()` back to disk. `requestSave()` saves after a 2 s debounce.
+- `src/textile-view.ts`: `TextileView extends TextFileView` with two modes, `'preview'` (default) and `'source'`. A header button (`addAction`) and the `toggle-textile-mode` command switch between them.
+  - Preview: `renderTextile()` → `sanitizeHTMLToDom` → `.redmine-textile-preview.markdown-rendered`. Link clicks are intercepted: `http(s)`/`mailto` go to `window.open`, everything else is cancelled so Obsidian's window never navigates.
+  - Source: a `<textarea>`. Each `input` updates `this.data` (re-adding `\r\n` for CRLF files) and calls `requestSave()`, which saves after a 2 s debounce.
+  - `setViewData(data, clear)`: `clear: true` means another file was opened in the tab. Identical text (the echo of our own save) is ignored. An external change while editing swaps the textarea value and keeps the caret.
+  - `save()` is skipped between `clear()` and the next `setViewData()`, so a late `requestSave()` can't write `''`.
+  - The mode is stored in `getState()`/`setState()`, i.e. in the workspace layout, so it persists per tab.
+- `src/render.ts`: `renderTextile(source)` wraps `textile-js` (`breaks: true`, like Redmine) and strips a leading BOM. It returns unsanitized HTML. `src/textile-js.d.ts` provides types for the package.
 - `src/constants.ts`: `VIEW_TYPE_TEXTILE = 'redmine-textile'`, `TEXTILE_EXTENSIONS`.
 - `tests/mocks/obsidian.ts`: the `obsidian` npm package ships types only, so vitest aliases `obsidian` to this hand-written runtime mock. `tests/`, `scripts/` and `vitest.config.ts` are outside `tsconfig` and in the ESLint `globalIgnores`.
 
-Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `textile-js`, preview ↔ source toggle, edit in a `<textarea>` + `requestSave()` → (3) Redmine macros before or after the parser: `{{collapse(Title) … }}` → `<details>`, `{{thumbnail(file.png, size=…)}}` → `<img>` via `app.vault.getResourcePath`, `#123456` → issue link. Check how `textile-js` handles colspan tables `|\4=.` and `<pre>` nested in collapse → (4) settings (Redmine URL, default mode) → (5) Redmine REST API (`PUT /issues/<id>` with `notes`).
+Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `textile-js`, preview ↔ source toggle, edit in a `<textarea>` + `requestSave()` (done) → (3) Redmine macros before or after the parser: `{{collapse(Title) … }}` → `<details>`, `{{thumbnail(file.png, size=…)}}` → `<img>` via `app.vault.getResourcePath`, `#123456` → issue link. Colspan tables already render; check `<pre>` nested in collapse → (4) settings (Redmine URL, default mode) → (5) Redmine REST API (`PUT /issues/<id>` with `notes`).
 
 ## Rules
 
@@ -30,6 +36,8 @@ Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `tex
 - When `src/` starts using a new Obsidian API, add it to `tests/mocks/obsidian.ts`.
 - UI strings are English, sentence case (enforced by the `obsidianmd` lint rules).
 - `isDesktopOnly: false`, so don't use Node or Electron APIs in `src/`.
+- `minAppVersion` is `1.1.0` (needed for `addAction`). Check `@since` in `node_modules/obsidian/obsidian.d.ts` before using new API.
+- `dompurify` is a dev dependency for the `sanitizeHTMLToDom` mock only. Never import it in `src/`.
 
 ## Obsidian vault: project knowledge base
 
