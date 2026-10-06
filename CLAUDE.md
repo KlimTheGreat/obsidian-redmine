@@ -17,22 +17,32 @@ Obsidian community plugin **Redmine**: view and edit Redmine `.textile` files (c
 
 - `src/main.ts`: `RedminePlugin` calls `registerView(VIEW_TYPE_TEXTILE, …)` and `registerExtensions(['textile'], VIEW_TYPE_TEXTILE)`. If another plugin already owns `.textile`, `registerExtensions` throws. The plugin catches the error, shows a `Notice` and keeps loading. Obsidian unregisters both calls on unload, so there's no `onunload`.
 - `src/textile-view.ts`: `TextileView extends TextFileView` with two modes, `'preview'` (default) and `'source'`. A header button (`addAction`) and the `toggle-textile-mode` command switch between them.
-  - Preview: `renderTextile()` → `sanitizeHTMLToDom` → `.redmine-textile-preview.markdown-rendered`. Link clicks are intercepted: `http(s)`/`mailto` go to `window.open`, everything else is cancelled so Obsidian's window never navigates.
+  - Preview: `renderTextile()` → `sanitizeHTMLToDom` → `.redmine-textile-preview.markdown-rendered`. Link clicks are intercepted: `http(s)`/`mailto` go to `window.open`, everything else is cancelled so Obsidian's window never navigates. If `renderTextile` throws (textile-js does on a NUL char), the preview shows an error line instead. Re-rendering keeps open `<details>` open, matched by position.
   - Source: a `<textarea>`. Each `input` updates `this.data` (re-adding `\r\n` for CRLF files) and calls `requestSave()`, which saves after a 2 s debounce.
   - `setViewData(data, clear)`: `clear: true` means another file was opened in the tab. Obsidian assigns `this.data` itself *before* calling `setViewData` (and drops the echo of our own save), so the view compares incoming text with what it shows (`shown`), never with `data`. An external change while editing swaps the textarea value and keeps the caret.
   - `save()` is skipped between `clear()` and the next `setViewData()`, so a late `requestSave()` can't write `''`.
   - The mode is stored in `getState()`/`setState()`, i.e. in the workspace layout, so it persists per tab.
-- `src/render.ts`: `renderTextile(source)` wraps `textile-js` (`breaks: true`, like Redmine) and strips a leading BOM. It returns unsanitized HTML. `src/textile-js.d.ts` provides types for the package.
+- `src/render.ts`: `renderTextile(source)` → unsanitized HTML. Strips a leading BOM, renders CRLF as LF, then mirrors Redmine's pipeline (`application_helper.rb`):
+  - known macros (`collapse`, `thumbnail`) are cut out into `redminemacroNe` placeholders before `textile-js` and put back after it;
+  - inside `<pre>`/`<code>` a macro shows as written, and `!{{…}}` prints it as text;
+  - `#123` at a line start is written as `&#35;123`, otherwise `textile-js` makes it `<ol start="123">`.
+- `src/macros.ts`: ports of Redmine's `collapse` (→ `<details>`, show/hide labels split by commas like Redmine's `exec_macro`) and `thumbnail` (→ `<img>` with `max-width`/`max-height`, Redmine's error text for bad args).
+- `src/preview.ts`: DOM pass over the sanitized fragment before it's attached:
+  - `!name!`/`{{thumbnail}}` images are resolved via `getFirstLinkpathDest` + `getResourcePath`, else replaced by a `.redmine-attachment` placeholder;
+  - `#123` refs outside `pre`/`code`/`a` get `span.redmine-issue-ref[data-issue]`;
+  - `<code class="sql">` gets `language-sql`, and `highlightCode()` runs Obsidian's Prism after attaching.
 - `src/constants.ts`: `VIEW_TYPE_TEXTILE = 'redmine-textile'`, `TEXTILE_EXTENSIONS`.
 - `tests/mocks/obsidian.ts`: the `obsidian` npm package ships types only, so vitest aliases `obsidian` to this hand-written runtime mock. Its `TextFileView` load/save lifecycle (`setData`, `loadFile` = `loadFileInternal`, `save`) and DOMPurify config are copied from Obsidian's `app.js` (`~/.config/obsidian/obsidian-<ver>.asar`). Test opening, external changes and saving through `loadFile()`/`save()`, not by calling `setViewData` directly. `tests/`, `scripts/` and `vitest.config.ts` are outside `tsconfig` and in the ESLint `globalIgnores`.
 
-Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `textile-js`, preview ↔ source toggle, edit in a `<textarea>` + `requestSave()` (done) → (3) Redmine macros before or after the parser: `{{collapse(Title) … }}` → `<details>`, `{{thumbnail(file.png, size=…)}}` → `<img>` via `app.vault.getResourcePath`, `#123456` → issue link. Colspan tables already render; check `<pre>` nested in collapse → (4) combined live-preview mode like markdown's: own CodeMirror 6 editor (Obsidian exposes `@codemirror/*`, already external in esbuild) with textile highlighting, then decorations hiding markup off the cursor line, then block widgets for tables/`<pre>`/collapse → (5) settings (Redmine URL, default mode, readable line length) → (6) Redmine REST API (`PUT /issues/<id>` with `notes`).
+Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `textile-js`, preview ↔ source toggle, edit in a `<textarea>` + `requestSave()` (done) → (3) Redmine macros and markup: collapse, thumbnail, inline images from the vault, issue-ref marks, Prism highlighting (done) → (4) combined live-preview mode like markdown's: own CodeMirror 6 editor (Obsidian exposes `@codemirror/*`, already external in esbuild) with textile highlighting, then decorations hiding markup off the cursor line, then block widgets for tables/`<pre>`/collapse → (5) settings (Redmine URL → turn `.redmine-issue-ref` marks into links, default mode, readable line length) → (6) Redmine REST API (`PUT /issues/<id>` with `notes`).
 
 ## Rules
 
 - `id` is `redmine` and must never change: it becomes the users' plugin folder name, and catalog ids can't contain `obsidian`. The display name `Redmine` doesn't contain "Obsidian" either.
 - The view never alters file content on its own. `getViewData()` returns exactly what it got, byte for byte, including BOM, `\r\n` and trailing whitespace, because closing the tab writes it to disk.
 - File text reaches the DOM only as text (`text`/`textContent`). Parsed HTML goes through `sanitizeHTMLToDom`, never `innerHTML`.
+- The preview mirrors what Redmine will show, not what looks nicest. When `textile-js` and Redmine disagree, port Redmine's behaviour (sources: `redmine/redmine` `app/helpers/application_helper.rb`, `lib/redmine/wiki_formatting/macros.rb`).
+- `document.createElement` is flagged by `obsidianmd/prefer-create-el`: use `createSpan`/`createEl` (mocked in `tests/mocks/obsidian.ts`). No regex lookbehind (`obsidianmd/regex-lookbehind`, iOS).
 - When `src/` starts using a new Obsidian API, add it to `tests/mocks/obsidian.ts`.
 - UI strings are English, sentence case (enforced by the `obsidianmd` lint rules).
 - `isDesktopOnly: false`, so don't use Node or Electron APIs in `src/`.

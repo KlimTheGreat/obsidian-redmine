@@ -41,3 +41,51 @@
 	outline: none;
 	background: transparent;
 }
+
+/* {{collapse}}: Redmine shows the first label while closed and the second while open. */
+.redmine-collapse > summary {
+	cursor: var(--cursor);
+	color: var(--link-color);
+}
+
+.redmine-collapse:not([open]) .redmine-collapse-hide,
+.redmine-collapse[open] .redmine-collapse-show {
+	display: none;
+}
+
+.redmine-collapse-body {
+	padding-inline-start: var(--size-4-4);
+	border-inline-start: 2px solid var(--background-modifier-border);
+}
+
+/* Issue references: marked now, links once the Redmine URL is a setting (stage 5). */
+.redmine-issue-ref {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+}
+
+/* An image attachment that isn't in the vault: it will exist only after the upload to Redmine. */
+.redmine-attachment {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	padding: 0 var(--size-4-1);
+	border: 1px dashed var(--background-modifier-border-hover);
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+}
+
+.redmine-attachment-icon {
+	display: inline-flex;
+}
+
+.redmine-attachment-icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.redmine-macro-error,
+.redmine-render-error {
+	color: var(--text-error);
+}
