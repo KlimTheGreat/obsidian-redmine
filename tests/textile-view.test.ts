@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TFile, WorkspaceLeaf } from 'obsidian';
+import { prism, TFile, WorkspaceLeaf } from 'obsidian';
 import { TextileView } from '../src/textile-view';
 import { VIEW_TYPE_TEXTILE } from '../src/constants';
 
@@ -88,7 +88,7 @@ describe('TextileView', () => {
 		const view = makeView();
 		view.setViewData('<script>window.pwned = 1</script>\n\n<img src="x" onerror="alert(1)">\n\n"bad":javascript:alert(1)', true);
 		expect(view.contentEl.querySelector('script')).toBeNull();
-		expect(view.contentEl.querySelector('img')?.hasAttribute('onerror')).toBe(false);
+		expect(view.contentEl.querySelector('[onerror]')).toBeNull();
 		expect(view.contentEl.querySelector('a')?.hasAttribute('href')).toBe(false);
 	});
 
@@ -313,5 +313,76 @@ describe('TextileView mode memory', () => {
 		expect(view.mode).toBe('preview');
 		await view.setState(null, { history: false });
 		expect(view.mode).toBe('preview');
+	});
+});
+
+describe('TextileView Redmine markup', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('shows an image from the vault next to the draft', () => {
+		const view = makeView();
+		view.file = new TFile('Oggetto/Prosv/273318/comments/273318-итоги.textile');
+		view.app.vault.files.push(new TFile('Oggetto/Prosv/273318/скрин.png'));
+		open(view, '!скрин.png!');
+		expect(preview(view)?.querySelector('img')?.getAttribute('src')).toBe('app://vault/Oggetto/Prosv/273318/скрин.png');
+	});
+
+	it('shows a placeholder when the name points to a file that is not an image', () => {
+		const view = makeView();
+		view.app.vault.files.push(new TFile('notes/скрин.png.md'), new TFile('notes/план.textile'));
+		open(view, '!план.textile!');
+		expect(preview(view)?.querySelector('img')).toBeNull();
+		expect(preview(view)?.querySelector('.redmine-attachment')?.textContent).toBe('план.textile');
+	});
+
+	it('highlights code blocks with Prism', async () => {
+		prism.highlighted.length = 0;
+		const view = makeView();
+		open(view, '<pre><code class="sql">\nSELECT 1;\n</code></pre>');
+		await vi.waitFor(() => expect(prism.highlighted).toHaveLength(1));
+		expect(prism.highlighted[0]).toBe(preview(view)?.querySelector('code.language-sql'));
+	});
+
+	it('keeps open collapses open when the file changes on disk', () => {
+		const view = makeView();
+		open(view, '{{collapse(A)\na\n}}\n\n{{collapse(B)\nb\n}}');
+		preview(view)!.querySelectorAll('details')[1]!.open = true;
+		changeOnDisk(view, '{{collapse(A)\na\n}}\n\n{{collapse(B)\nb, edited\n}}');
+		const details = preview(view)!.querySelectorAll('details');
+		expect([details[0]!.open, details[1]!.open]).toEqual([false, true]);
+		expect(details[1]!.textContent).toContain('b, edited');
+	});
+
+	it('opens collapses closed after switching back from source', () => {
+		const view = makeView();
+		open(view, '{{collapse(A)\na\n}}');
+		preview(view)!.querySelector('details')!.open = true;
+		view.setMode('source');
+		view.setMode('preview');
+		expect(preview(view)!.querySelector('details')!.open).toBe(false);
+	});
+
+	it('shows a message instead of failing when the parser throws, and keeps the data', () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const view = makeView();
+		// textile-js throws on a NUL character (TypeError inside the parser).
+		const text = 'a' + String.fromCharCode(0) + 'b';
+		open(view, text);
+		expect(preview(view)?.querySelector('.redmine-render-error')?.textContent).toContain('could not be rendered');
+		expect(error).toHaveBeenCalled();
+		expect(view.getViewData()).toBe(text);
+		view.setMode('source');
+		expect(editor(view)?.value).toBe(text);
+	});
+
+	it('clicking a collapse title does not count as a link click', () => {
+		const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+		const view = makeView();
+		view.setViewData('{{collapse(A)\na\n}}', true);
+		const evt = click(preview(view)!.querySelector('summary')!);
+		expect(evt.defaultPrevented).toBe(false);
+		expect(open).not.toHaveBeenCalled();
 	});
 });

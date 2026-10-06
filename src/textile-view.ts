@@ -1,8 +1,12 @@
 import { sanitizeHTMLToDom, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_TEXTILE } from './constants';
+import { deferImageSources, enhancePreview, highlightCode } from './preview';
 import { renderTextile } from './render';
 
 export type TextileMode = 'preview' | 'source';
+
+// Image types Obsidian can display; any other file found by name is not an image.
+const IMAGE_EXTENSIONS = ['avif', 'bmp', 'gif', 'jpe', 'jpeg', 'jpg', 'png', 'svg', 'webp'];
 
 /** View for .textile files: rendered preview or editable source, switched from the tab header. */
 export class TextileView extends TextFileView {
@@ -102,18 +106,42 @@ export class TextileView extends TextFileView {
 	}
 
 	private render(): void {
+		// Re-rendering the preview (a change on disk) keeps open collapses open: they're matched by position.
+		const opened = Array.from(this.contentEl.querySelectorAll('details'), (details) => details.open);
 		this.contentEl.empty();
 		this.editor = null;
 		this.shown = this.data;
 		if (this.mode === 'source') this.renderSource();
-		else this.renderPreview();
+		else this.renderPreview(opened);
 	}
 
-	private renderPreview(): void {
+	private renderPreview(opened: boolean[]): void {
 		const preview = this.contentEl.createDiv({ cls: 'redmine-textile-preview markdown-rendered' });
+		let html: string;
+		try {
+			html = renderTextile(this.data);
+		} catch (error) {
+			// textile-js throws on some input (e.g. a NUL character); the source mode still shows the file.
+			console.error('Redmine: could not render textile', error);
+			preview.createEl('p', { cls: 'redmine-render-error', text: 'This file could not be rendered. Switch to source to see and edit it.' });
+			return;
+		}
 		// Parsed HTML only through Obsidian's sanitizer: drafts may hold raw <script>, on* handlers, javascript: links.
-		preview.append(sanitizeHTMLToDom(renderTextile(this.data)));
+		const content = sanitizeHTMLToDom(deferImageSources(html));
+		enhancePreview(content, { resolveImage: (name) => this.resolveImage(name) });
+		preview.append(content);
+		preview.querySelectorAll('details').forEach((details, i) => {
+			if (opened[i]) details.open = true;
+		});
 		preview.addEventListener('click', onPreviewClick);
+		highlightCode(preview).catch((error) => console.error('Redmine: could not highlight code', error));
+	}
+
+	// An attachment name is looked up like a wikilink from this file: next to it first, then anywhere in the vault.
+	private resolveImage(name: string): string | null {
+		const file = this.app.metadataCache.getFirstLinkpathDest(name, this.file?.path ?? '');
+		if (!file || !IMAGE_EXTENSIONS.includes(file.extension.toLowerCase())) return null;
+		return this.app.vault.getResourcePath(file);
 	}
 
 	private renderSource(): void {
