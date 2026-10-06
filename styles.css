@@ -1,7 +1,9 @@
+/* Same font as the markdown editor: monospace at the base size looked oversized next to notes. */
 .redmine-textile-source {
 	white-space: pre-wrap;
 	word-break: break-word;
-	font-family: var(--font-monospace);
+	font-family: var(--font-text);
 	font-size: var(--font-text-size);
+	line-height: var(--line-height-normal);
 	user-select: text;
 }
