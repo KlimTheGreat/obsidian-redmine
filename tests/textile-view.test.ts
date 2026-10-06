@@ -4,7 +4,9 @@ import { TextileView } from '../src/textile-view';
 import { VIEW_TYPE_TEXTILE } from '../src/constants';
 
 function makeView(): TextileView {
-	return new TextileView(new WorkspaceLeaf());
+	const view = new TextileView(new WorkspaceLeaf());
+	view.onload();
+	return view;
 }
 
 function preview(view: TextileView): HTMLElement | null {
@@ -15,6 +17,19 @@ function click(el: Element): MouseEvent {
 	const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
 	el.dispatchEvent(evt);
 	return evt;
+}
+
+function modeButton(view: TextileView): HTMLElement {
+	return view.actionsEl.querySelector('button')!;
+}
+
+function editor(view: TextileView): HTMLTextAreaElement | null {
+	return view.contentEl.querySelector('textarea');
+}
+
+function type(el: HTMLTextAreaElement, value: string): void {
+	el.value = value;
+	el.dispatchEvent(new Event('input'));
 }
 
 describe('TextileView', () => {
@@ -112,5 +127,132 @@ describe('TextileView preview links', () => {
 		const evt = click(view.contentEl.querySelector('a')!);
 		expect(evt.defaultPrevented).toBe(true);
 		expect(open).not.toHaveBeenCalled();
+	});
+});
+
+describe('TextileView source mode', () => {
+	it('opens in preview with an "Edit source" button', () => {
+		const view = makeView();
+		view.setViewData('h2. x', true);
+		expect(view.mode).toBe('preview');
+		expect(modeButton(view).getAttribute('aria-label')).toBe('Edit source');
+		expect(modeButton(view).dataset.icon).toBe('pencil');
+		expect(editor(view)).toBeNull();
+	});
+
+	it('the header button switches to source and back', () => {
+		const view = makeView();
+		view.setViewData('h2. x', true);
+		click(modeButton(view));
+		expect(view.mode).toBe('source');
+		expect(editor(view)?.value).toBe('h2. x');
+		expect(preview(view)).toBeNull();
+		expect(modeButton(view).getAttribute('aria-label')).toBe('Show preview');
+		expect(modeButton(view).dataset.icon).toBe('book-open');
+		click(modeButton(view));
+		expect(view.mode).toBe('preview');
+		expect(editor(view)).toBeNull();
+		expect(preview(view)?.querySelector('h2')?.textContent).toBe('x');
+	});
+
+	it('shows HTML from the file as text in the source, never as markup', () => {
+		const view = makeView();
+		view.setViewData('<img src="x" onerror="alert(1)">', true);
+		view.setMode('source');
+		expect(view.contentEl.querySelector('img')).toBeNull();
+		expect(editor(view)?.value).toBe('<img src="x" onerror="alert(1)">');
+	});
+
+	it('typing updates the data verbatim and requests a save', async () => {
+		const view = makeView();
+		view.setViewData('h2. x', true);
+		view.setMode('source');
+		type(editor(view)!, 'h2. Новый\n\nтекст  \n');
+		expect(view.getViewData()).toBe('h2. Новый\n\nтекст  \n');
+		expect(view.saveRequests).toBe(1);
+		await view.save();
+		expect(view.savedData).toEqual(['h2. Новый\n\nтекст  \n']);
+	});
+
+	it('keeps CRLF line breaks after an edit', () => {
+		const view = makeView();
+		view.setViewData('a\r\nb', true);
+		view.setMode('source');
+		type(editor(view)!, 'a\nb\nc');
+		expect(view.getViewData()).toBe('a\r\nb\r\nc');
+	});
+
+	it('does not touch the data when the source is only viewed', () => {
+		const view = makeView();
+		view.setViewData('\uFEFFa\r\nb  ', true);
+		view.setMode('source');
+		view.setMode('preview');
+		expect(view.getViewData()).toBe('\uFEFFa\r\nb  ');
+		expect(view.saveRequests).toBe(0);
+	});
+
+	it('preview shows the edited text after switching back', () => {
+		const view = makeView();
+		view.setViewData('h2. old', true);
+		view.setMode('source');
+		type(editor(view)!, 'h2. new');
+		view.setMode('preview');
+		expect(preview(view)?.querySelector('h2')?.textContent).toBe('new');
+	});
+
+	it('keeps the textarea and caret when the same text arrives again', () => {
+		const view = makeView();
+		view.setViewData('abcdef', true);
+		view.setMode('source');
+		const el = editor(view)!;
+		type(el, 'abcdefg');
+		el.setSelectionRange(3, 3);
+		view.setViewData('abcdefg', false); // echo of our own save
+		expect(editor(view)).toBe(el);
+		expect(el.selectionStart).toBe(3);
+	});
+
+	it('keeps the caret when the file changes on disk while editing', () => {
+		const view = makeView();
+		view.setViewData('abcdef', true);
+		view.setMode('source');
+		const el = editor(view)!;
+		el.setSelectionRange(2, 4);
+		view.setViewData('abcdefgh', false);
+		expect(editor(view)).toBe(el);
+		expect(el.value).toBe('abcdefgh');
+		expect([el.selectionStart, el.selectionEnd]).toEqual([2, 4]);
+		view.setViewData('ab', false);
+		expect([el.selectionStart, el.selectionEnd]).toEqual([2, 2]);
+		expect(view.getViewData()).toBe('ab');
+	});
+
+	it('stays in source mode with a fresh textarea when another file opens in the tab', () => {
+		const view = makeView();
+		view.setViewData('first', true);
+		view.setMode('source');
+		const first = editor(view);
+		view.setViewData('second', true);
+		expect(view.mode).toBe('source');
+		expect(editor(view)).not.toBe(first);
+		expect(editor(view)?.value).toBe('second');
+	});
+
+	it('does not save between clear() and the next file', async () => {
+		const view = makeView();
+		view.setViewData('draft', true);
+		view.clear();
+		await view.save(); // a requestSave() that fired late
+		expect(view.savedData).toEqual([]);
+		view.setViewData('next', true);
+		await view.save();
+		expect(view.savedData).toEqual(['next']);
+	});
+
+	it('asks Obsidian to store the layout when the mode changes', () => {
+		const view = makeView();
+		view.setMode('source');
+		view.setMode('source');
+		expect(view.app.workspace.layoutSaves).toBe(1);
 	});
 });

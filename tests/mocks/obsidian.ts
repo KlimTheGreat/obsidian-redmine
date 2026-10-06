@@ -54,12 +54,48 @@ export class TFile {
 
 export class WorkspaceLeaf {}
 
+export function setIcon(parent: HTMLElement, iconId: string): void {
+	parent.dataset.icon = iconId;
+}
+
+export class Workspace {
+	layoutSaves = 0;
+	requestSaveLayout(): void {
+		this.layoutSaves++;
+	}
+}
+
+export class App {
+	workspace = new Workspace();
+}
+
 export class TextFileView {
 	data = '';
 	file: TFile | null = null;
+	app = new App();
 	contentEl: HTMLElement = document.createElement('div');
-	requestSave: () => void = () => {};
+	actionsEl: HTMLElement = document.createElement('div');
+	saveRequests = 0;
+	savedData: string[] = [];
+	requestSave: () => void = () => {
+		this.saveRequests++;
+	};
 	constructor(public leaf: WorkspaceLeaf) {}
+	onload(): void {}
+	getViewData(): string {
+		return this.data;
+	}
+	// The real save() writes getViewData() to the file; the mock records what would be written.
+	async save(_clear?: boolean): Promise<void> {
+		this.savedData.push(this.getViewData());
+	}
+	addAction(icon: string, title: string, callback: (evt: MouseEvent) => unknown): HTMLElement {
+		const el = this.actionsEl.createEl('button');
+		el.setAttribute('aria-label', title);
+		setIcon(el, icon);
+		el.addEventListener('click', (evt) => callback(evt));
+		return el;
+	}
 }
 
 export const notices: string[] = [];
