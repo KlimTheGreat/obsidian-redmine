@@ -1,0 +1,7 @@
+.redmine-textile-source {
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-family: var(--font-monospace);
+	font-size: var(--font-text-size);
+	user-select: text;
+}
