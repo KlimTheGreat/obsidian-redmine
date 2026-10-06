@@ -1,12 +1,15 @@
 // Minimal runtime stand-in for the `obsidian` module (the real package ships only types).
 // Covers exactly the API surface the plugin uses; extend when the plugin starts using more.
 
+import DOMPurify from 'dompurify';
+
 type DomElementInfo = { text?: string; cls?: string };
 
 declare global {
 	interface HTMLElement {
 		empty(): void;
 		createEl<K extends keyof HTMLElementTagNameMap>(tag: K, o?: DomElementInfo): HTMLElementTagNameMap[K];
+		createDiv(o?: DomElementInfo): HTMLDivElement;
 	}
 }
 
@@ -25,6 +28,15 @@ HTMLElement.prototype.createEl = function <K extends keyof HTMLElementTagNameMap
 	this.appendChild(el);
 	return el;
 };
+
+HTMLElement.prototype.createDiv = function (this: HTMLElement, o?: DomElementInfo): HTMLDivElement {
+	return this.createEl('div', o);
+};
+
+// Obsidian sanitizes with DOMPurify too, so tests see the same stripping as the app.
+export function sanitizeHTMLToDom(html: string): DocumentFragment {
+	return DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true });
+}
 
 export class TFile {
 	constructor(public path: string) {}
