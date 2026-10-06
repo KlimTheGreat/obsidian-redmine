@@ -11,6 +11,8 @@ export class TextileView extends TextFileView {
 	private loaded = false;
 	// textarea turns \r\n into \n; edits of a CRLF file are written back with \r\n.
 	private lineBreak = '\n';
+	// Text the screen currently shows. Not `data`: Obsidian assigns `data` itself before calling setViewData().
+	private shown: string | null = null;
 	private editor: HTMLTextAreaElement | null = null;
 	private modeAction: HTMLElement | null = null;
 
@@ -43,8 +45,8 @@ export class TextileView extends TextFileView {
 
 	setViewData(data: string, clear: boolean): void {
 		if (clear) this.clear();
-		// Same text again (e.g. the echo of our own save): keep the textarea, its caret and scroll.
-		if (this.loaded && data === this.data) return;
+		// Already on screen: keep the textarea, its caret and scroll.
+		if (this.loaded && data === this.shown) return;
 		this.data = data;
 		this.lineBreak = data.includes('\r\n') ? '\r\n' : '\n';
 		if (this.loaded && this.editor) this.replaceEditorText(this.editor, data);
@@ -55,6 +57,7 @@ export class TextileView extends TextFileView {
 	clear(): void {
 		this.loaded = false;
 		this.data = '';
+		this.shown = null;
 		this.editor = null;
 		this.contentEl.empty();
 	}
@@ -101,6 +104,7 @@ export class TextileView extends TextFileView {
 	private render(): void {
 		this.contentEl.empty();
 		this.editor = null;
+		this.shown = this.data;
 		if (this.mode === 'source') this.renderSource();
 		else this.renderPreview();
 	}
@@ -119,6 +123,7 @@ export class TextileView extends TextFileView {
 		editor.spellcheck = false;
 		editor.addEventListener('input', () => {
 			this.data = this.lineBreak === '\n' ? editor.value : editor.value.replace(/\n/g, '\r\n');
+			this.shown = this.data;
 			this.requestSave();
 		});
 		this.editor = editor;
@@ -128,6 +133,7 @@ export class TextileView extends TextFileView {
 	private replaceEditorText(editor: HTMLTextAreaElement, data: string): void {
 		const { selectionStart, selectionEnd } = editor;
 		editor.value = data;
+		this.shown = data;
 		editor.setSelectionRange(Math.min(selectionStart, editor.value.length), Math.min(selectionEnd, editor.value.length));
 	}
 }

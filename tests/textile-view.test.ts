@@ -27,6 +27,16 @@ function editor(view: TextileView): HTMLTextAreaElement | null {
 	return view.contentEl.querySelector('textarea');
 }
 
+// Opens a file the way Obsidian does (TextFileView.loadFileInternal → setData → setViewData).
+function open(view: TextileView, text: string): void {
+	view.loadFile(text, true);
+}
+
+// The file changed on disk while open (vault modify event → loadFileInternal with clear=false).
+function changeOnDisk(view: TextileView, text: string): void {
+	view.loadFile(text, false);
+}
+
 function type(el: HTMLTextAreaElement, value: string): void {
 	el.value = value;
 	el.dispatchEvent(new Event('input'));
@@ -165,7 +175,7 @@ describe('TextileView source mode', () => {
 
 	it('typing updates the data verbatim and requests a save', async () => {
 		const view = makeView();
-		view.setViewData('h2. x', true);
+		open(view, 'h2. x');
 		view.setMode('source');
 		type(editor(view)!, 'h2. Новый\n\nтекст  \n');
 		expect(view.getViewData()).toBe('h2. Новый\n\nтекст  \n');
@@ -200,31 +210,51 @@ describe('TextileView source mode', () => {
 		expect(preview(view)?.querySelector('h2')?.textContent).toBe('new');
 	});
 
-	it('keeps the textarea and caret when the same text arrives again', () => {
+	it('keeps the textarea and caret when our own save comes back from disk', async () => {
 		const view = makeView();
-		view.setViewData('abcdef', true);
+		open(view, 'abcdef');
 		view.setMode('source');
 		const el = editor(view)!;
 		type(el, 'abcdefg');
 		el.setSelectionRange(3, 3);
-		view.setViewData('abcdefg', false); // echo of our own save
+		await view.save();
+		changeOnDisk(view, 'abcdefg');
 		expect(editor(view)).toBe(el);
 		expect(el.selectionStart).toBe(3);
 	});
 
-	it('keeps the caret when the file changes on disk while editing', () => {
+	it('shows a change made on disk while editing and keeps the caret', () => {
 		const view = makeView();
-		view.setViewData('abcdef', true);
+		open(view, 'abcdef');
 		view.setMode('source');
 		const el = editor(view)!;
 		el.setSelectionRange(2, 4);
-		view.setViewData('abcdefgh', false);
+		changeOnDisk(view, 'abcdefgh');
 		expect(editor(view)).toBe(el);
 		expect(el.value).toBe('abcdefgh');
 		expect([el.selectionStart, el.selectionEnd]).toEqual([2, 4]);
-		view.setViewData('ab', false);
+		changeOnDisk(view, 'ab');
+		expect(el.value).toBe('ab');
 		expect([el.selectionStart, el.selectionEnd]).toEqual([2, 2]);
 		expect(view.getViewData()).toBe('ab');
+	});
+
+	it('typing after a change on disk builds on the new text, not the old one', async () => {
+		const view = makeView();
+		open(view, 'old text');
+		view.setMode('source');
+		changeOnDisk(view, 'text from Claude');
+		const el = editor(view)!;
+		type(el, el.value + '!');
+		await view.save();
+		expect(view.savedData).toEqual(['text from Claude!']);
+	});
+
+	it('shows a change made on disk in the preview', () => {
+		const view = makeView();
+		open(view, 'h2. old');
+		changeOnDisk(view, 'h2. new');
+		expect(preview(view)?.querySelector('h2')?.textContent).toBe('new');
 	});
 
 	it('stays in source mode with a fresh textarea when another file opens in the tab', () => {
@@ -240,13 +270,16 @@ describe('TextileView source mode', () => {
 
 	it('does not save between clear() and the next file', async () => {
 		const view = makeView();
-		view.setViewData('draft', true);
-		view.clear();
+		open(view, 'draft');
+		view.setMode('source');
+		type(editor(view)!, 'draft edited');
+		await view.save(true); // tab switches to another file: Obsidian saves, then clears
 		await view.save(); // a requestSave() that fired late
-		expect(view.savedData).toEqual([]);
-		view.setViewData('next', true);
+		expect(view.savedData).toEqual(['draft edited']);
+		open(view, 'next');
+		type(editor(view)!, 'next edited');
 		await view.save();
-		expect(view.savedData).toEqual(['next']);
+		expect(view.savedData).toEqual(['draft edited', 'next edited']);
 	});
 
 	it('asks Obsidian to store the layout when the mode changes', () => {
