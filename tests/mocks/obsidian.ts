@@ -60,7 +60,12 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 	}
 });
 
+// Real one imports the result into the live document, where an <img src> starts loading right away.
 export function sanitizeHTMLToDom(html: string): DocumentFragment {
+	return document.importNode(sanitize(html), true);
+}
+
+function sanitize(html: string): DocumentFragment {
 	return DOMPurify.sanitize(html, {
 		ALLOW_UNKNOWN_PROTOCOLS: true,
 		RETURN_DOM_FRAGMENT: true,

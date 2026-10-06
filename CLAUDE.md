@@ -28,7 +28,7 @@ Obsidian community plugin **Redmine**: view and edit Redmine `.textile` files (c
   - `#123` at a line start is written as `&#35;123`, otherwise `textile-js` makes it `<ol start="123">`.
 - `src/macros.ts`: ports of Redmine's `collapse` (→ `<details>`, show/hide labels split by commas like Redmine's `exec_macro`) and `thumbnail` (→ `<img>` with `max-width`/`max-height`, Redmine's error text for bad args).
 - `src/preview.ts`: DOM pass over the sanitized fragment before it's attached:
-  - `!name!`/`{{thumbnail}}` images are resolved via `getFirstLinkpathDest` + `getResourcePath`, else replaced by a `.redmine-attachment` placeholder;
+  - `deferImageSources()` (string, before sanitizing) moves relative `<img src>` to `data-redmine-src`: the real `sanitizeHTMLToDom` `importNode`s into the live document, where a bare `src` would already be fetched. The name is then decoded like Redmine's `CGI.unescape` and resolved via `getFirstLinkpathDest` + `getResourcePath`, else replaced by a `.redmine-attachment` placeholder;
   - `#123` refs outside `pre`/`code`/`a` get `span.redmine-issue-ref[data-issue]`;
   - `<code class="sql">` gets `language-sql`, and `highlightCode()` runs Obsidian's Prism after attaching.
 - `src/constants.ts`: `VIEW_TYPE_TEXTILE = 'redmine-textile'`, `TEXTILE_EXTENSIONS`.

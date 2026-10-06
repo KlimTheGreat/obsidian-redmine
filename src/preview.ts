@@ -14,6 +14,15 @@ const URL_SCHEME_RE = /^([a-z][a-z\d+.-]*:|\/\/)/i;
 // A text node's start or end stands where Redmine sees a tag boundary, so both count as separators.
 const ISSUE_RE = /(^|[\s(,\-[>])(!)?(##?\d+(?:(?:#note)?-\d+)?)(?=[\p{P}\p{S}](?:[^A-Za-z0-9_/]|$)|\s|$)/gu;
 
+/**
+ * Moves attachment names out of `<img src>` before sanitizing: Obsidian's sanitizeHTMLToDom imports the result into the
+ * live document, where a bare `src="скрин.png"` would already be fetched. textile-js always writes `src="…"`.
+ */
+export function deferImageSources(html: string): string {
+	return html.replace(/(<img\b[^>]*?\s)src="([^"]*)"/gi, (all: string, head: string, src: string) =>
+		src === '' || URL_SCHEME_RE.test(src) ? all : `${head}data-redmine-src="${src}"`);
+}
+
 /** Redmine-specific touches on sanitized preview content, done before it's attached to the page. */
 export function enhancePreview(root: DocumentFragment, context: PreviewContext): void {
 	resolveImages(root, context);
@@ -32,12 +41,22 @@ export async function highlightCode(root: HTMLElement): Promise<void> {
 // In Redmine `!name.png!` and {{thumbnail}} name an attachment of the issue. Here the name is looked up in the vault;
 // an image that isn't there becomes a placeholder, since it will only exist once uploaded to Redmine.
 function resolveImages(root: DocumentFragment, context: PreviewContext): void {
-	for (const img of Array.from(root.querySelectorAll('img'))) {
-		const src = img.getAttribute('src') ?? '';
-		if (src === '' || URL_SCHEME_RE.test(src)) continue;
-		const url = context.resolveImage(src);
+	for (const img of Array.from(root.querySelectorAll('img[data-redmine-src]'))) {
+		const name = decodeAttachmentName(img.getAttribute('data-redmine-src') ?? '');
+		img.removeAttribute('data-redmine-src');
+		const url = context.resolveImage(name);
 		if (url) img.setAttribute('src', url);
-		else img.replaceWith(attachmentPlaceholder(src));
+		else img.replaceWith(attachmentPlaceholder(name));
+	}
+}
+
+// Redmine matches attachments after CGI.unescape: `%20` and `+` are spaces. textile-js allows no spaces inside `!…!`,
+// so this is the only way to name an image like Obsidian's "Pasted image ….png".
+function decodeAttachmentName(name: string): string {
+	try {
+		return decodeURIComponent(name.replace(/\+/g, ' '));
+	} catch {
+		return name;
 	}
 }
 

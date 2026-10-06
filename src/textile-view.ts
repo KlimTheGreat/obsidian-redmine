@@ -1,6 +1,6 @@
 import { sanitizeHTMLToDom, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_TEXTILE } from './constants';
-import { enhancePreview, highlightCode } from './preview';
+import { deferImageSources, enhancePreview, highlightCode } from './preview';
 import { renderTextile } from './render';
 
 export type TextileMode = 'preview' | 'source';
@@ -127,7 +127,7 @@ export class TextileView extends TextFileView {
 			return;
 		}
 		// Parsed HTML only through Obsidian's sanitizer: drafts may hold raw <script>, on* handlers, javascript: links.
-		const content = sanitizeHTMLToDom(html);
+		const content = sanitizeHTMLToDom(deferImageSources(html));
 		enhancePreview(content, { resolveImage: (name) => this.resolveImage(name) });
 		preview.append(content);
 		preview.querySelectorAll('details').forEach((details, i) => {

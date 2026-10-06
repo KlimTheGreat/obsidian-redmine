@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { prism, sanitizeHTMLToDom } from 'obsidian';
-import { enhancePreview, highlightCode, PreviewContext } from '../src/preview';
+import { deferImageSources, enhancePreview, highlightCode, PreviewContext } from '../src/preview';
 import { renderTextile } from '../src/render';
 
 const noImages: PreviewContext = { resolveImage: () => null };
 
 // Renders textile the way the view does (render → sanitize → enhance) into a detached element.
 function show(source: string, context: PreviewContext = noImages): HTMLElement {
-	const content = sanitizeHTMLToDom(renderTextile(source));
+	const content = sanitizeHTMLToDom(deferImageSources(renderTextile(source)));
 	enhancePreview(content, context);
 	const root = document.createElement('div');
 	root.append(content);
@@ -44,6 +44,32 @@ describe('enhancePreview images', () => {
 		const root = show('!https://example.com/a.png!', { resolveImage: (name) => (asked.push(name), null) });
 		expect(root.querySelector('img')?.getAttribute('src')).toBe('https://example.com/a.png');
 		expect(asked).toEqual([]);
+	});
+});
+
+describe('deferImageSources', () => {
+	it('leaves no attachment URL for the browser to fetch before the name is resolved', () => {
+		const content = sanitizeHTMLToDom(deferImageSources(renderTextile('!скрин.png! {{thumbnail(a.png)}} <img src="b.png"> !https://x.y/c.png!')));
+		const imgs = Array.from(content.querySelectorAll('img'));
+		expect(imgs.map((img) => img.getAttribute('src'))).toEqual([null, null, null, 'https://x.y/c.png']);
+		expect(imgs.map((img) => img.getAttribute('data-redmine-src'))).toEqual(['скрин.png', 'a.png', 'b.png', null]);
+	});
+
+	it('leaves an empty src alone', () => {
+		expect(deferImageSources('<img src="">')).toBe('<img src="">');
+	});
+});
+
+describe('enhancePreview attachment names', () => {
+	it('decodes a percent-encoded name like Redmine, so pasted images with spaces resolve', () => {
+		const root = show('!Pasted%20image%201.png!', { resolveImage: (name) => (name === 'Pasted image 1.png' ? 'app://vault/p.png' : null) });
+		expect(root.querySelector('img')?.getAttribute('src')).toBe('app://vault/p.png');
+		expect(root.querySelector('img')?.hasAttribute('data-redmine-src')).toBe(false);
+	});
+
+	it('shows the decoded name on the placeholder and keeps a malformed one as written', () => {
+		expect(show('!a+b%20c.png!').querySelector('.redmine-attachment')?.textContent).toBe('a b c.png');
+		expect(show('!bad%E0.png!').querySelector('.redmine-attachment')?.textContent).toBe('bad%E0.png');
 	});
 });
 
