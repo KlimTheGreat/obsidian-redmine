@@ -6,10 +6,14 @@ export interface PreviewContext {
 }
 
 const URL_SCHEME_RE = /^([a-z][a-z\d+.-]*:|\/\/)/i;
+// Redmine's LINKS_RE (app/helpers/application_helper.rb), issue part only: #123, ##123, #123-6, #123#note-6; `!` escapes.
+// A text node's start or end stands where Redmine sees a tag boundary, so both count as separators.
+const ISSUE_RE = /(^|[\s(,\-[>])(!)?(##?\d+(?:(?:#note)?-\d+)?)(?=[\p{P}\p{S}](?:[^A-Za-z0-9_/]|$)|\s|$)/gu;
 
 /** Redmine-specific touches on sanitized preview content, done before it's attached to the page. */
 export function enhancePreview(root: DocumentFragment, context: PreviewContext): void {
 	resolveImages(root, context);
+	markIssueRefs(root);
 }
 
 // In Redmine `!name.png!` and {{thumbnail}} name an attachment of the issue. Here the name is looked up in the vault;
@@ -29,4 +33,29 @@ function attachmentPlaceholder(name: string): HTMLElement {
 	setIcon(placeholder.createSpan({ cls: 'redmine-attachment-icon' }), 'image');
 	placeholder.appendText(name);
 	return placeholder;
+}
+
+// Issue references get a mark now and become links once the Redmine URL is configurable (stage 5).
+// Like Redmine, text inside <pre>, <code> and existing links is left alone.
+function markIssueRefs(root: DocumentFragment): void {
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const nodes: Text[] = [];
+	for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+		if (!node.parentElement?.closest('pre, code, a')) nodes.push(node as Text);
+	}
+	for (const node of nodes) {
+		const text = node.data;
+		const parts: (string | Node)[] = [];
+		let last = 0;
+		for (const match of text.matchAll(ISSUE_RE)) {
+			const [, leading, escaped, ref] = match as unknown as [string, string, string | undefined, string];
+			const start = match.index + leading.length;
+			parts.push(text.slice(last, start));
+			parts.push(escaped ? ref : createSpan({ cls: 'redmine-issue-ref', text: ref, attr: { 'data-issue': /\d+/.exec(ref)![0] } }));
+			last = start + (escaped?.length ?? 0) + ref.length;
+		}
+		if (last === 0) continue;
+		parts.push(text.slice(last));
+		node.replaceWith(...parts);
+	}
 }

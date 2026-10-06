@@ -116,3 +116,13 @@ describe('renderTextile macros', () => {
 		expect(renderTextile('redminemacro0e')).toBe('<p>redminemacro0e</p>');
 	});
 });
+
+describe('renderTextile issue numbers', () => {
+	it('keeps a line that starts with an issue number a paragraph, like Redmine', () => {
+		expect(renderTextile('#273318 — итог')).toBe('<p>&#35;273318 — итог</p>');
+	});
+
+	it('still renders numbered lists', () => {
+		expect(renderTextile('# один\n# два')).toContain('<ol>');
+	});
+});

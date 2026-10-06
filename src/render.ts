@@ -29,7 +29,7 @@ export function renderTextile(source: string): string {
 		return `redminemacro${macros.length - 1}e`;
 	});
 	// `breaks: true` matches Redmine: a single newline inside a paragraph is a line break.
-	return injectMacros(textile(withTokens, { breaks: true }), macros);
+	return injectMacros(textile(protectIssueRefs(withTokens), { breaks: true }), macros);
 }
 
 function expandMacro(all: string, escaped: boolean, name: string, args: string, block: string | undefined): CaughtMacro | null {
@@ -40,6 +40,12 @@ function expandMacro(all: string, escaped: boolean, name: string, args: string, 
 		return { source: all, html: collapseHtml(parseMacroArgs(args), renderTextile((block ?? '').trim())), block: true };
 	}
 	return { source: all, html: thumbnailHtml(parseMacroArgs(args)), block: false };
+}
+
+// textile-js reads `#123 text` at a line start as a numbered list starting at 123; Redmine's parser wants a space
+// after `#` and keeps it a paragraph with an issue link. The entity renders as `#`, also inside <pre> and @code@.
+function protectIssueRefs(text: string): string {
+	return text.replace(/^#(?=\d)/gm, '&#35;');
 }
 
 // Redmine's parse_non_pre_blocks: inside <pre>/<code> a macro is not executed and shows as written.
