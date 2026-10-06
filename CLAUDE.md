@@ -49,6 +49,13 @@ Stage roadmap: (1) open `.textile` as raw source (done) → (2) render with `tex
 - `minAppVersion` is `1.1.0` (needed for `addAction`). Check `@since` in `node_modules/obsidian/obsidian.d.ts` before using new API.
 - `dompurify` is a dev dependency for the `sanitizeHTMLToDom` mock only. Never import it in `src/`.
 
+## Git
+
+- Base branch is `main`; remote `origin` is `github.com/KlimTheGreat/obsidian-redmine`.
+- Each feature or stage gets its own branch off `main` (e.g. `stage-4`). Commit there, not on `main`.
+- When the work is done and tests pass, merge it into `main` locally (`git merge --no-ff <branch>`), re-run `npm test` on the result, then delete the branch with `git branch -d`.
+- Never push: the repo owner does that. No pull requests (personal repo).
+
 ## Obsidian vault: project knowledge base
 
 Project notes live in the vault at `~/Dropbox/Second Brain/Projects/obsidian-redmine/`. They're plain markdown, so read and write them with the normal file tools. **Before reading or writing any note, read `~/Dropbox/Second Brain/Projects/CLAUDE.md`**: it defines folder layout, file names and frontmatter. The entry point is `Projects/obsidian-redmine/obsidian-redmine.md` (stages, analysis, doc links). Stage plans are in `plans/`, named `obsidian-redmine-NN-<name>`. Record each stage's results in the main note's `## Итоги` section.
