@@ -59,7 +59,11 @@ export function setIcon(parent: HTMLElement, iconId: string): void {
 }
 
 export class Workspace {
+	activeView: unknown = null;
 	layoutSaves = 0;
+	getActiveViewOfType<T>(type: new (...args: never[]) => T): T | null {
+		return this.activeView instanceof type ? this.activeView : null;
+	}
 	requestSaveLayout(): void {
 		this.layoutSaves++;
 	}
@@ -67,6 +71,10 @@ export class Workspace {
 
 export class App {
 	workspace = new Workspace();
+}
+
+export interface ViewStateResult {
+	history: boolean;
 }
 
 export class TextFileView {
@@ -82,6 +90,10 @@ export class TextFileView {
 	};
 	constructor(public leaf: WorkspaceLeaf) {}
 	onload(): void {}
+	getState(): Record<string, unknown> {
+		return { file: this.file?.path ?? null };
+	}
+	async setState(_state: unknown, _result: ViewStateResult): Promise<void> {}
 	getViewData(): string {
 		return this.data;
 	}
@@ -106,7 +118,19 @@ export class Notice {
 	}
 }
 
+export interface Command {
+	id: string;
+	name: string;
+	checkCallback?: (checking: boolean) => boolean | void;
+}
+
 export class Plugin {
+	app = new App();
+	commands: Command[] = [];
+	addCommand(command: Command): Command {
+		this.commands.push(command);
+		return command;
+	}
 	views = new Map<string, (leaf: WorkspaceLeaf) => unknown>();
 	extensions = new Map<string, string>();
 	registerView(type: string, creator: (leaf: WorkspaceLeaf) => unknown): void {

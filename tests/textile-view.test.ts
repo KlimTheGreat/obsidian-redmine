@@ -256,3 +256,29 @@ describe('TextileView source mode', () => {
 		expect(view.app.workspace.layoutSaves).toBe(1);
 	});
 });
+
+describe('TextileView mode memory', () => {
+	it('stores the mode in the view state next to the base state', () => {
+		const view = makeView();
+		expect(view.getState()).toEqual({ file: null, mode: 'preview' });
+		view.setMode('source');
+		expect(view.getState()).toEqual({ file: null, mode: 'source' });
+	});
+
+	it('restores source mode from the view state', async () => {
+		const view = makeView();
+		view.setViewData('h2. x', true);
+		await view.setState({ file: 'a.textile', mode: 'source' }, { history: false });
+		expect(view.mode).toBe('source');
+		expect(editor(view)?.value).toBe('h2. x');
+		expect(modeButton(view).getAttribute('aria-label')).toBe('Show preview');
+	});
+
+	it('ignores a missing or unknown mode in the view state', async () => {
+		const view = makeView();
+		await view.setState({ file: 'a.textile', mode: 'wysiwyg' }, { history: false });
+		expect(view.mode).toBe('preview');
+		await view.setState(null, { history: false });
+		expect(view.mode).toBe('preview');
+	});
+});

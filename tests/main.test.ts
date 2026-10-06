@@ -28,5 +28,23 @@ describe('RedminePlugin.onload', () => {
 		plugin.extensions.set('textile', 'other-plugin-view');
 		await expect(plugin.onload()).resolves.toBeUndefined();
 		expect(notices).toEqual(['Redmine: .textile files are already handled by another plugin.']);
+		expect(plugin.extensions.get('textile')).toBe('other-plugin-view');
+		expect(plugin.views.has(VIEW_TYPE_TEXTILE)).toBe(true);
+	});
+
+	it('adds a toggle command that works only in a textile view', async () => {
+		const plugin = new RedminePlugin();
+		await plugin.onload();
+		const command = plugin.commands.find((c) => c.id === 'toggle-textile-mode');
+		expect(command?.name).toBe('Toggle preview and source');
+
+		expect(command?.checkCallback?.(true)).toBe(false);
+
+		const view = new TextileView(new WorkspaceLeaf());
+		plugin.app.workspace.activeView = view;
+		expect(command?.checkCallback?.(true)).toBe(true);
+		expect(view.mode).toBe('preview');
+		command?.checkCallback?.(false);
+		expect(view.mode).toBe('source');
 	});
 });

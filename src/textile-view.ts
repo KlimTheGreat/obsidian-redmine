@@ -1,4 +1,4 @@
-import { sanitizeHTMLToDom, setIcon, TextFileView, WorkspaceLeaf } from 'obsidian';
+import { sanitizeHTMLToDom, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_TEXTILE } from './constants';
 import { renderTextile } from './render';
 
@@ -75,6 +75,18 @@ export class TextileView extends TextFileView {
 
 	toggleMode(): void {
 		this.setMode(this.mode === 'preview' ? 'source' : 'preview');
+	}
+
+	// Obsidian keeps view state in the workspace layout: the mode survives restarts and file switches in this tab.
+	getState(): Record<string, unknown> {
+		return { ...super.getState(), mode: this.mode };
+	}
+
+	async setState(state: unknown, result: ViewStateResult): Promise<void> {
+		// Apply the saved mode first, so the file loaded by super.setState() renders in it straight away.
+		const mode = (state as { mode?: unknown } | null)?.mode;
+		if (mode === 'preview' || mode === 'source') this.setMode(mode);
+		await super.setState(state, result);
 	}
 
 	private updateModeAction(): void {
