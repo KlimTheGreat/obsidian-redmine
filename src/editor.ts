@@ -1,7 +1,7 @@
 import { Annotation, ChangeSpec, Compartment, EditorState, Extension, Text, Transaction, TransactionSpec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { searchKeymap } from '@codemirror/search';
+import { openSearchPanel, searchKeymap } from '@codemirror/search';
 import { textileDecorations } from './editor-decorations';
 
 export interface TextileEditorOptions {
@@ -59,6 +59,11 @@ export class TextileEditor {
 
 	focus(): void {
 		this.view.focus();
+	}
+
+	/** CodeMirror's find/replace panel, the same one Mod-f opens when the key reaches the editor. */
+	openSearch(): void {
+		openSearchPanel(this.view);
 	}
 
 	destroy(): void {
