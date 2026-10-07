@@ -334,6 +334,57 @@ describe('TextileView editing', () => {
 });
 
 describe('TextileView live preview and source', () => {
+	it('live preview hides markup on lines without the cursor', () => {
+		const view = makeView('live');
+		view.setViewData('h2. Title\n\nsome *bold* text', true);
+		expect(lines(view)).toEqual(['h2. Title', '', 'some bold text']);
+		const cm = editor(view)!;
+		cm.dispatch({ selection: { anchor: cm.state.doc.length } });
+		expect(lines(view)).toEqual(['Title', '', 'some *bold* text']);
+		expect(view.contentEl.querySelector('.cm-line.HyperMD-header-2')).not.toBeNull();
+		expect(view.contentEl.querySelector('.cm-strong')?.textContent).toBe('bold');
+	});
+
+	it('source mode shows all markup, styled', () => {
+		const view = makeView('source');
+		view.setViewData('h2. Title\n\nsome *bold* text', true);
+		expect(lines(view)).toEqual(['h2. Title', '', 'some *bold* text']);
+		expect(view.contentEl.querySelector('.cm-strong')?.textContent).toBe('bold');
+		expect(view.contentEl.querySelector('.is-live-preview')).toBeNull();
+	});
+
+	it('a selection over several lines shows the markup on each of them', () => {
+		const view = makeView('live');
+		view.setViewData('*a*\n*b*\n*c*', true);
+		editor(view)!.dispatch({ selection: { anchor: 1, head: 5 } });
+		expect(lines(view)).toEqual(['*a*', '*b*', 'c']);
+	});
+
+	it('shows bullets and numbers in place of list markers', () => {
+		const view = makeView('live');
+		view.setViewData('x\n\n* a\n# b\n# c', true);
+		expect(lines(view)).toEqual(['x', '', '•a', '1.b', '2.c']);
+		expect(view.contentEl.querySelector('.cm-line.redmine-list-line .redmine-list-bullet')).not.toBeNull();
+	});
+
+	it('keeps a BOM file byte for byte and still styles its first heading', () => {
+		const view = makeView('live');
+		view.setViewData('\uFEFFh2. x\r\n\r\ny', true);
+		const cm = editor(view)!;
+		cm.dispatch({ selection: { anchor: cm.state.doc.length } });
+		expect(lines(view)).toEqual(['\uFEFFx', '', 'y']);
+		expect(view.contentEl.querySelector('.cm-line.HyperMD-header-2')).not.toBeNull();
+		expect(view.getViewData()).toBe('\uFEFFh2. x\r\n\r\ny');
+	});
+
+	it('styles a change made on disk while live preview is open', () => {
+		const view = makeView('live');
+		open(view, 'plain');
+		changeOnDisk(view, 'plain\n\nnow *bold*');
+		expect(lines(view)).toEqual(['plain', '', 'now bold']);
+		expect(view.saveRequests).toBe(0);
+	});
+
 	it('switching between live preview and source keeps the editor, caret and undo history', () => {
 		const view = makeView('live');
 		open(view, 'some *bold* text');

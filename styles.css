@@ -40,7 +40,7 @@
 	border-inline-start: 2px solid var(--background-modifier-border);
 }
 
-/* Issue references: marked now, links once the Redmine URL is a setting (stage 5). */
+/* Issue references: marked now, links once the Redmine URL is a setting (stage 6). */
 .redmine-issue-ref {
 	color: var(--text-accent);
 	font-weight: var(--font-semibold);
@@ -70,4 +70,66 @@
 .redmine-macro-error,
 .redmine-render-error {
 	color: var(--text-error);
+}
+
+/* Editor markup that stays visible (source mode, the cursor line, table pipes, tags) is faint, like markdown's. */
+.redmine-textile-editor .cm-formatting {
+	color: var(--text-faint);
+}
+
+.redmine-textile-editor .redmine-macro {
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
+	font-size: var(--code-size);
+}
+
+.redmine-textile-editor .cm-line.redmine-code-line {
+	background-color: var(--code-background);
+}
+
+.redmine-ins {
+	text-decoration: underline;
+}
+
+.redmine-sup,
+.redmine-sub {
+	font-size: var(--font-smallest);
+}
+
+.redmine-sup {
+	vertical-align: super;
+}
+
+.redmine-sub {
+	vertical-align: sub;
+}
+
+.redmine-cite {
+	font-style: italic;
+}
+
+/* Live preview: list markers become bullets or numbers; nested items are indented instead of showing `**`. */
+.redmine-list-bullet {
+	padding-inline-end: var(--size-4-2);
+	color: var(--list-marker-color);
+}
+
+.redmine-textile-editor.is-live-preview .cm-line.redmine-list-2 {
+	padding-inline-start: var(--list-indent);
+}
+
+.redmine-textile-editor.is-live-preview .cm-line.redmine-list-3 {
+	padding-inline-start: calc(var(--list-indent) * 2);
+}
+
+.redmine-textile-editor.is-live-preview .cm-line.redmine-list-4 {
+	padding-inline-start: calc(var(--list-indent) * 3);
+}
+
+.redmine-textile-editor.is-live-preview .cm-line.redmine-list-5 {
+	padding-inline-start: calc(var(--list-indent) * 4);
+}
+
+.redmine-textile-editor.is-live-preview .cm-line.redmine-list-6 {
+	padding-inline-start: calc(var(--list-indent) * 5);
 }

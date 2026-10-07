@@ -2,6 +2,7 @@ import { Annotation, ChangeSpec, Compartment, EditorState, Extension, Text, Tran
 import { EditorView, keymap } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { searchKeymap } from '@codemirror/search';
+import { textileDecorations } from './editor-decorations';
 
 export interface TextileEditorOptions {
 	live: boolean;
@@ -65,9 +66,8 @@ export class TextileEditor {
 		this.host.remove();
 	}
 
-	// No textile styling yet: the editor shows the file as plain text in both editing modes.
-	private stylingFor(_live: boolean): Extension {
-		return [];
+	private stylingFor(live: boolean): Extension {
+		return textileDecorations(live);
 	}
 
 	private createState(text: string): EditorState {
