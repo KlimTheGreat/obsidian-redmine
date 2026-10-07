@@ -88,8 +88,11 @@ export class TextileEditor {
 	}
 }
 
+// The more common break wins: a file that is mostly LF with one stray CRLF must not collapse into a single line.
 function lineBreakOf(text: string): string {
-	return text.includes('\r\n') ? '\r\n' : '\n';
+	const crlf = text.split('\r\n').length - 1;
+	const lf = text.split('\n').length - 1 - crlf;
+	return crlf > lf ? '\r\n' : '\n';
 }
 
 // Smallest single change from the current text to `next`: common start and end are kept.

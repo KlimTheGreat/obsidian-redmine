@@ -285,6 +285,17 @@ describe('TextileView editing', () => {
 		expect(view.savedData).toEqual(['text from Claude!']);
 	});
 
+	it('splits a file with mixed line breaks by the more common kind, keeping the rest byte for byte', () => {
+		const view = makeView('live');
+		const text = 'a\r\nb\n\nh2. c\n* item\n';
+		open(view, text);
+		expect(editor(view)!.state.doc.lines).toBe(6);
+		expect(view.contentEl.querySelector('.cm-line.HyperMD-header-3, .cm-line.HyperMD-header-2')).not.toBeNull();
+		expect(view.getViewData()).toBe(text);
+		type(editor(view)!, 0, 0, '!');
+		expect(view.getViewData()).toBe('!' + text);
+	});
+
 	it('takes a change on disk that switches the file between LF and CRLF', () => {
 		const view = makeView('source');
 		open(view, 'a\nb');
