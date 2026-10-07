@@ -414,6 +414,21 @@ describe('TextileView live preview and source', () => {
 		expect(view.contentEl.querySelector('.is-live-preview')).not.toBeNull();
 	});
 
+	// Obsidian's Ctrl+F ("Search current file") swallows the key before CodeMirror and calls view.showSearch().
+	it('Obsidian\'s search command opens CodeMirror\'s search panel in the editor', () => {
+		const view = makeView('source');
+		view.setViewData('some text', true);
+		view.showSearch(false);
+		expect(view.contentEl.querySelector('.cm-search')).not.toBeNull();
+	});
+
+	it('Obsidian\'s search command does nothing in reading mode', () => {
+		const view = makeView();
+		view.setViewData('some text', true);
+		view.showSearch(false);
+		expect(view.contentEl.querySelector('.cm-search')).toBeNull();
+	});
+
 	it('toggling live preview does nothing in reading mode', () => {
 		const view = makeView();
 		view.toggleLivePreview();

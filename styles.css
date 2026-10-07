@@ -133,3 +133,63 @@
 .redmine-textile-editor.is-live-preview .cm-line.redmine-list-6 {
 	padding-inline-start: calc(var(--list-indent) * 5);
 }
+
+/* CodeMirror's search panel (Ctrl+F). Obsidian's notes use their own search bar, so its theme leaves this one unstyled. */
+.redmine-textile-editor .cm-panels {
+	background-color: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.redmine-textile-editor .cm-panels-bottom {
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.redmine-textile-editor .cm-search {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	font-size: var(--font-ui-small);
+}
+
+.redmine-textile-editor .cm-search br {
+	flex-basis: 100%;
+	content: '';
+}
+
+.redmine-textile-editor .cm-search .cm-textfield {
+	margin: 0;
+	padding: var(--size-4-1) var(--size-4-2);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	background-color: var(--background-modifier-form-field);
+	border: var(--input-border-width, 1px) solid var(--background-modifier-border);
+	border-radius: var(--input-radius);
+}
+
+.redmine-textile-editor .cm-search .cm-button {
+	margin: 0;
+	padding: var(--size-4-1) var(--size-4-3);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	background-image: none;
+	background-color: var(--interactive-normal);
+	border: none;
+	border-radius: var(--button-radius);
+}
+
+.redmine-textile-editor .cm-search .cm-button:hover {
+	background-color: var(--interactive-hover);
+}
+
+.redmine-textile-editor .cm-search label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	color: var(--text-muted);
+}
+
+.redmine-textile-editor .cm-search button[name='close'] {
+	color: var(--text-muted);
+}

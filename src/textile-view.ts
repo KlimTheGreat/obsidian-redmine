@@ -104,6 +104,14 @@ export class TextileView extends TextFileView {
 		if (this.mode !== 'preview') this.setMode(this.mode === 'live' ? 'source' : 'live');
 	}
 
+	/**
+	 * Obsidian's "Search current file" (Ctrl+F) takes the key before the editor sees it and calls this on any view
+	 * that has it. Reading mode has no search yet.
+	 */
+	showSearch(_replace: boolean): void {
+		this.editor?.openSearch();
+	}
+
 	// Obsidian keeps view state in the workspace layout: the mode survives restarts and file switches in this tab.
 	getState(): Record<string, unknown> {
 		return { ...super.getState(), mode: this.mode };
