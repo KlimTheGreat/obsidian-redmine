@@ -11,6 +11,7 @@ declare global {
 		createEl<K extends keyof HTMLElementTagNameMap>(tag: K, o?: DomElementInfo): HTMLElementTagNameMap[K];
 		createDiv(o?: DomElementInfo): HTMLDivElement;
 		createSpan(o?: DomElementInfo): HTMLSpanElement;
+		toggleClass(classes: string, value: boolean): void;
 	}
 	interface Node {
 		appendText(text: string): void;
@@ -46,6 +47,10 @@ HTMLElement.prototype.createEl = function <K extends keyof HTMLElementTagNameMap
 
 HTMLElement.prototype.createDiv = function (this: HTMLElement, o?: DomElementInfo): HTMLDivElement {
 	return this.createEl('div', o);
+};
+
+HTMLElement.prototype.toggleClass = function (this: HTMLElement, classes: string, value: boolean) {
+	this.classList.toggle(classes, value);
 };
 
 HTMLElement.prototype.createSpan = function (this: HTMLElement, o?: DomElementInfo): HTMLSpanElement {

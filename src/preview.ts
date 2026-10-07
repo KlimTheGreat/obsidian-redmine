@@ -12,7 +12,7 @@ interface Prism {
 const URL_SCHEME_RE = /^([a-z][a-z\d+.-]*:|\/\/)/i;
 // Redmine's LINKS_RE (app/helpers/application_helper.rb), issue part only: #123, ##123, #123-6, #123#note-6; `!` escapes.
 // A text node's start or end stands where Redmine sees a tag boundary, so both count as separators.
-const ISSUE_RE = /(^|[\s(,\-[>])(!)?(##?\d+(?:(?:#note)?-\d+)?)(?=[\p{P}\p{S}](?:[^A-Za-z0-9_/]|$)|\s|$)/gu;
+export const ISSUE_RE = /(^|[\s(,\-[>])(!)?(##?\d+(?:(?:#note)?-\d+)?)(?=[\p{P}\p{S}](?:[^A-Za-z0-9_/]|$)|\s|$)/gu;
 
 /**
  * Moves attachment names out of `<img src>` before sanitizing: Obsidian's sanitizeHTMLToDom imports the result into the

@@ -1,23 +1,30 @@
 import { sanitizeHTMLToDom, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_TEXTILE } from './constants';
+import { TextileEditor } from './editor';
 import { deferImageSources, enhancePreview, highlightCode } from './preview';
 import { renderTextile } from './render';
 
-export type TextileMode = 'preview' | 'source';
+export type TextileMode = 'preview' | 'live' | 'source';
+export type EditMode = Exclude<TextileMode, 'preview'>;
+
+const MODES: readonly TextileMode[] = ['preview', 'live', 'source'];
 
 // Image types Obsidian can display; any other file found by name is not an image.
 const IMAGE_EXTENSIONS = ['avif', 'bmp', 'gif', 'jpe', 'jpeg', 'jpg', 'png', 'svg', 'webp'];
 
-/** View for .textile files: rendered preview or editable source, switched from the tab header. */
+/**
+ * View for .textile files, modes like a markdown note: reading (Redmine preview) and editing, where editing is either
+ * live preview (markup hidden off the cursor line) or source. The header button switches reading ↔ editing.
+ */
 export class TextileView extends TextFileView {
-	mode: TextileMode = 'preview';
+	mode: TextileMode = 'live';
+	// Where the header button goes from reading: the editing mode used last.
+	editMode: EditMode = 'live';
 	// False between clear() and the next setViewData(): `data` then belongs to no file.
 	private loaded = false;
-	// textarea turns \r\n into \n; edits of a CRLF file are written back with \r\n.
-	private lineBreak = '\n';
 	// Text the screen currently shows. Not `data`: Obsidian assigns `data` itself before calling setViewData().
 	private shown: string | null = null;
-	private editor: HTMLTextAreaElement | null = null;
+	private editor: TextileEditor | null = null;
 	private modeAction: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf) {
@@ -26,7 +33,7 @@ export class TextileView extends TextFileView {
 
 	onload(): void {
 		super.onload();
-		this.modeAction = this.addAction('pencil', 'Edit source', () => this.toggleMode());
+		this.modeAction = this.addAction('book-open', 'Read', () => this.toggleMode());
 		this.updateModeAction();
 	}
 
@@ -49,12 +56,15 @@ export class TextileView extends TextFileView {
 
 	setViewData(data: string, clear: boolean): void {
 		if (clear) this.clear();
-		// Already on screen: keep the textarea, its caret and scroll.
+		// Already on screen: keep the editor, its caret and scroll.
 		if (this.loaded && data === this.shown) return;
 		this.data = data;
-		this.lineBreak = data.includes('\r\n') ? '\r\n' : '\n';
-		if (this.loaded && this.editor) this.replaceEditorText(this.editor, data);
-		else this.render();
+		if (this.loaded && this.editor) {
+			this.editor.setText(data);
+			this.shown = data;
+		} else {
+			this.render();
+		}
 		this.loaded = true;
 	}
 
@@ -62,7 +72,7 @@ export class TextileView extends TextFileView {
 		this.loaded = false;
 		this.data = '';
 		this.shown = null;
-		this.editor = null;
+		this.destroyEditor();
 		this.contentEl.empty();
 	}
 
@@ -74,14 +84,24 @@ export class TextileView extends TextFileView {
 
 	setMode(mode: TextileMode): void {
 		if (mode === this.mode) return;
+		const wasEditing = this.mode !== 'preview';
 		this.mode = mode;
+		if (mode !== 'preview') this.editMode = mode;
 		this.updateModeAction();
-		this.render();
+		// Live preview ↔ source keeps the same editor: caret, scroll and undo history stay.
+		if (wasEditing && mode !== 'preview' && this.editor) this.editor.setLive(mode === 'live');
+		else this.render();
 		this.app.workspace.requestSaveLayout();
 	}
 
+	/** Reading ↔ editing (in the editing mode used last). */
 	toggleMode(): void {
-		this.setMode(this.mode === 'preview' ? 'source' : 'preview');
+		this.setMode(this.mode === 'preview' ? this.editMode : 'preview');
+	}
+
+	/** Live preview ↔ source; does nothing in reading mode. */
+	toggleLivePreview(): void {
+		if (this.mode !== 'preview') this.setMode(this.mode === 'live' ? 'source' : 'live');
 	}
 
 	// Obsidian keeps view state in the workspace layout: the mode survives restarts and file switches in this tab.
@@ -92,15 +112,15 @@ export class TextileView extends TextFileView {
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		// Apply the saved mode first, so the file loaded by super.setState() renders in it straight away.
 		const mode = (state as { mode?: unknown } | null)?.mode;
-		if (mode === 'preview' || mode === 'source') this.setMode(mode);
+		if (MODES.includes(mode as TextileMode)) this.setMode(mode as TextileMode);
 		await super.setState(state, result);
 	}
 
 	private updateModeAction(): void {
 		if (!this.modeAction) return;
 		const action = this.mode === 'preview'
-			? { icon: 'pencil', title: 'Edit source' }
-			: { icon: 'book-open', title: 'Show preview' };
+			? { icon: 'pencil', title: 'Edit' }
+			: { icon: 'book-open', title: 'Read' };
 		setIcon(this.modeAction, action.icon);
 		this.modeAction.setAttribute('aria-label', action.title);
 	}
@@ -108,11 +128,11 @@ export class TextileView extends TextFileView {
 	private render(): void {
 		// Re-rendering the preview (a change on disk) keeps open collapses open: they're matched by position.
 		const opened = Array.from(this.contentEl.querySelectorAll('details'), (details) => details.open);
+		this.destroyEditor();
 		this.contentEl.empty();
-		this.editor = null;
 		this.shown = this.data;
-		if (this.mode === 'source') this.renderSource();
-		else this.renderPreview(opened);
+		if (this.mode === 'preview') this.renderPreview(opened);
+		else this.renderEditor();
 	}
 
 	private renderPreview(opened: boolean[]): void {
@@ -123,7 +143,7 @@ export class TextileView extends TextFileView {
 		} catch (error) {
 			// textile-js throws on some input (e.g. a NUL character); the source mode still shows the file.
 			console.error('Redmine: could not render textile', error);
-			preview.createEl('p', { cls: 'redmine-render-error', text: 'This file could not be rendered. Switch to source to see and edit it.' });
+			preview.createEl('p', { cls: 'redmine-render-error', text: 'This file could not be rendered. Switch to editing to see and change it.' });
 			return;
 		}
 		// Parsed HTML only through Obsidian's sanitizer: drafts may hold raw <script>, on* handlers, javascript: links.
@@ -144,25 +164,21 @@ export class TextileView extends TextFileView {
 		return this.app.vault.getResourcePath(file);
 	}
 
-	private renderSource(): void {
-		const editor = this.contentEl.createEl('textarea', { cls: 'redmine-textile-source' });
-		// `value`, not markup: the file text never gets parsed as HTML.
-		editor.value = this.data;
-		editor.spellcheck = false;
-		editor.addEventListener('input', () => {
-			this.data = this.lineBreak === '\n' ? editor.value : editor.value.replace(/\n/g, '\r\n');
-			this.shown = this.data;
-			this.requestSave();
+	private renderEditor(): void {
+		// The editor gets the file text as a CodeMirror document: text only, never parsed as HTML.
+		this.editor = new TextileEditor(this.contentEl, this.data, {
+			live: this.mode === 'live',
+			onChange: (text) => {
+				this.data = text;
+				this.shown = text;
+				this.requestSave();
+			},
 		});
-		this.editor = editor;
 	}
 
-	// File changed on disk while editing: swap the text, keep the caret where it was (clamped to the new length).
-	private replaceEditorText(editor: HTMLTextAreaElement, data: string): void {
-		const { selectionStart, selectionEnd } = editor;
-		editor.value = data;
-		this.shown = data;
-		editor.setSelectionRange(Math.min(selectionStart, editor.value.length), Math.min(selectionEnd, editor.value.length));
+	private destroyEditor(): void {
+		this.editor?.destroy();
+		this.editor = null;
 	}
 }
 

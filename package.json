@@ -19,6 +19,11 @@
 	],
 	"license": "MIT",
 	"devDependencies": {
+		"@codemirror/commands": "6.8.1",
+		"@codemirror/language": "6.12.4",
+		"@codemirror/search": "6.5.11",
+		"@codemirror/state": "6.5.0",
+		"@codemirror/view": "6.38.6",
 		"@eslint/js": "^9.39.4",
 		"@types/node": "^22.15.17",
 		"dompurify": "^3.4.16",

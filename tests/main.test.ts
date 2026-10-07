@@ -36,15 +36,32 @@ describe('RedminePlugin.onload', () => {
 		const plugin = new RedminePlugin();
 		await plugin.onload();
 		const command = plugin.commands.find((c) => c.id === 'toggle-textile-mode');
-		expect(command?.name).toBe('Toggle preview and source');
+		expect(command?.name).toBe('Toggle reading and editing');
 
 		expect(command?.checkCallback?.(true)).toBe(false);
 
 		const view = new TextileView(new WorkspaceLeaf());
 		plugin.app.workspace.activeView = view;
 		expect(command?.checkCallback?.(true)).toBe(true);
+		expect(view.mode).toBe('live');
+		command?.checkCallback?.(false);
 		expect(view.mode).toBe('preview');
+	});
+
+	it('adds a live preview command that works only while editing a textile file', async () => {
+		const plugin = new RedminePlugin();
+		await plugin.onload();
+		const command = plugin.commands.find((c) => c.id === 'toggle-live-preview');
+		expect(command?.name).toBe('Toggle live preview and source');
+
+		expect(command?.checkCallback?.(true)).toBe(false);
+
+		const view = new TextileView(new WorkspaceLeaf());
+		plugin.app.workspace.activeView = view;
+		expect(command?.checkCallback?.(true)).toBe(true);
 		command?.checkCallback?.(false);
 		expect(view.mode).toBe('source');
+		view.setMode('preview');
+		expect(command?.checkCallback?.(true)).toBe(false);
 	});
 });

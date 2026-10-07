@@ -3,7 +3,7 @@ import { collapseHtml, escapeHtml, parseMacroArgs, thumbnailHtml } from './macro
 
 // Redmine's MACROS_RE (app/helpers/application_helper.rb): optional `!` escape, name, optional (args) on one line,
 // optional block of text between newlines. The block is lazy, so the first `}}` on its own line closes it: no nesting.
-const MACRO_RE = /(!)?\{\{(\w+)(?:\(([^\n\r]*?)\))?([\n\r][\s\S]*?[\n\r])?\}\}/g;
+export const MACRO_RE = /(!)?\{\{(\w+)(?:\(([^\n\r]*?)\))?([\n\r][\s\S]*?[\n\r])?\}\}/g;
 // Placeholder for a caught macro: plain lowercase letters and digits, which textile-js passes through untouched.
 const TOKEN_RE = /<p>redminemacro(\d+)e<\/p>|redminemacro(\d+)e/g;
 const PRE_TAG_RE = /(<\/?(?:pre|code)\b[^>]*>)/i;
@@ -32,8 +32,13 @@ export function renderTextile(source: string): string {
 	return injectMacros(textile(protectIssueRefs(withTokens), { breaks: true }), macros);
 }
 
+/** Macros this plugin runs like Redmine; any other `{{name}}` stays text, as in Redmine without that plugin. */
+export function isKnownMacro(name: string): boolean {
+	return name === 'collapse' || name === 'thumbnail';
+}
+
 function expandMacro(all: string, escaped: boolean, name: string, args: string, block: string | undefined): CaughtMacro | null {
-	if (name !== 'collapse' && name !== 'thumbnail') return null;
+	if (!isKnownMacro(name)) return null;
 	// `!{{…}}` prints the macro as text, without the `!`.
 	if (escaped) return { source: all, html: escapeHtml(all.slice(1)), block: false };
 	if (name === 'collapse') {
