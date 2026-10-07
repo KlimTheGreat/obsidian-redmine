@@ -15,11 +15,21 @@ export default class RedminePlugin extends Plugin {
 		// No default hotkey (plugin guidelines); users can bind one, e.g. the Ctrl+E they use for notes.
 		this.addCommand({
 			id: 'toggle-textile-mode',
-			name: 'Toggle preview and source',
+			name: 'Toggle reading and editing',
 			checkCallback: (checking) => {
 				const view = this.app.workspace.getActiveViewOfType(TextileView);
 				if (!view) return false;
 				if (!checking) view.toggleMode();
+				return true;
+			},
+		});
+		this.addCommand({
+			id: 'toggle-live-preview',
+			name: 'Toggle live preview and source',
+			checkCallback: (checking) => {
+				const view = this.app.workspace.getActiveViewOfType(TextileView);
+				if (!view || view.mode === 'preview') return false;
+				if (!checking) view.toggleLivePreview();
 				return true;
 			},
 		});

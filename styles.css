@@ -4,42 +4,24 @@
 	padding: 0;
 }
 
-.redmine-textile-preview,
-.redmine-textile-source {
+.redmine-textile-preview {
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
 	padding: var(--file-margins);
 	overflow-y: auto;
+	overflow-wrap: break-word;
+	user-select: text;
 	font-family: var(--font-text);
 	font-size: var(--font-preferred-size);
 	line-height: var(--line-height-normal);
 	color: var(--text-normal);
 }
 
-.redmine-textile-preview {
-	overflow-wrap: break-word;
-	user-select: text;
-}
-
-.redmine-textile-source {
-	display: block;
-	border: none;
-	border-radius: 0;
-	box-shadow: none;
-	background: transparent;
-	resize: none;
-	white-space: pre-wrap;
-	word-break: break-word;
-}
-
-/* Obsidian's global textarea styles add a border and focus ring; the source should look like the note editor. */
-.redmine-textile-source:hover,
-.redmine-textile-source:focus {
-	border: none;
-	box-shadow: none;
-	outline: none;
-	background: transparent;
+/* Editing: the .markdown-source-view.mod-cm6 classes give the editor Obsidian's layout and font; the margins match
+   the preview's. */
+.redmine-textile-editor .cm-scroller {
+	padding: var(--file-margins);
 }
 
 /* {{collapse}}: Redmine shows the first label while closed and the second while open. */

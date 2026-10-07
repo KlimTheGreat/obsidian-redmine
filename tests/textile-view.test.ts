@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prism, TFile, WorkspaceLeaf } from 'obsidian';
-import { TextileView } from '../src/textile-view';
+import { EditorView } from '@codemirror/view';
+import { undo } from '@codemirror/commands';
+import { TextileMode, TextileView } from '../src/textile-view';
 import { VIEW_TYPE_TEXTILE } from '../src/constants';
 
-function makeView(): TextileView {
+// Starts in reading mode unless told otherwise, as a tab restored with that mode would.
+function makeView(mode: TextileMode = 'preview'): TextileView {
 	const view = new TextileView(new WorkspaceLeaf());
+	view.mode = mode;
+	if (mode !== 'preview') view.editMode = mode;
 	view.onload();
 	return view;
 }
@@ -23,8 +28,14 @@ function modeButton(view: TextileView): HTMLElement {
 	return view.actionsEl.querySelector('button')!;
 }
 
-function editor(view: TextileView): HTMLTextAreaElement | null {
-	return view.contentEl.querySelector('textarea');
+function editor(view: TextileView): EditorView | null {
+	const el = view.contentEl.querySelector<HTMLElement>('.cm-editor');
+	return el ? EditorView.findFromDOM(el) : null;
+}
+
+// What the editor shows, line by line (hidden markup is not in the DOM).
+function lines(view: TextileView): string[] {
+	return Array.from(view.contentEl.querySelectorAll('.cm-line'), (line) => line.textContent ?? '');
 }
 
 // Opens a file the way Obsidian does (TextFileView.loadFileInternal → setData → setViewData).
@@ -37,9 +48,9 @@ function changeOnDisk(view: TextileView, text: string): void {
 	view.loadFile(text, false);
 }
 
-function type(el: HTMLTextAreaElement, value: string): void {
-	el.value = value;
-	el.dispatchEvent(new Event('input'));
+// The user typing: replaces from..to with `insert`, tagged as input like CodeMirror's own typing.
+function type(cm: EditorView, from: number, to: number, insert: string): void {
+	cm.dispatch({ changes: { from, to, insert }, userEvent: 'input.type' });
 }
 
 describe('TextileView', () => {
@@ -140,114 +151,147 @@ describe('TextileView preview links', () => {
 	});
 });
 
-describe('TextileView source mode', () => {
-	it('opens in preview with an "Edit source" button', () => {
-		const view = makeView();
+describe('TextileView editing', () => {
+	it('opens a new tab in live preview with a "Read" button', () => {
+		const view = new TextileView(new WorkspaceLeaf());
+		view.onload();
 		view.setViewData('h2. x', true);
-		expect(view.mode).toBe('preview');
-		expect(modeButton(view).getAttribute('aria-label')).toBe('Edit source');
-		expect(modeButton(view).dataset.icon).toBe('pencil');
-		expect(editor(view)).toBeNull();
+		expect(view.mode).toBe('live');
+		expect(editor(view)).not.toBeNull();
+		expect(preview(view)).toBeNull();
+		expect(modeButton(view).getAttribute('aria-label')).toBe('Read');
+		expect(modeButton(view).dataset.icon).toBe('book-open');
 	});
 
-	it('the header button switches to source and back', () => {
-		const view = makeView();
+	it('the header button switches to reading and back to the editing mode used last', () => {
+		const view = makeView('source');
 		view.setViewData('h2. x', true);
-		click(modeButton(view));
-		expect(view.mode).toBe('source');
-		expect(editor(view)?.value).toBe('h2. x');
-		expect(preview(view)).toBeNull();
-		expect(modeButton(view).getAttribute('aria-label')).toBe('Show preview');
-		expect(modeButton(view).dataset.icon).toBe('book-open');
 		click(modeButton(view));
 		expect(view.mode).toBe('preview');
 		expect(editor(view)).toBeNull();
 		expect(preview(view)?.querySelector('h2')?.textContent).toBe('x');
+		expect(modeButton(view).getAttribute('aria-label')).toBe('Edit');
+		expect(modeButton(view).dataset.icon).toBe('pencil');
+		click(modeButton(view));
+		expect(view.mode).toBe('source');
+		expect(editor(view)?.state.doc.toString()).toBe('h2. x');
 	});
 
-	it('shows HTML from the file as text in the source, never as markup', () => {
-		const view = makeView();
+	it('shows HTML from the file as text in the editor, never as markup', () => {
+		const view = makeView('source');
 		view.setViewData('<img src="x" onerror="alert(1)">', true);
-		view.setMode('source');
 		expect(view.contentEl.querySelector('img')).toBeNull();
-		expect(editor(view)?.value).toBe('<img src="x" onerror="alert(1)">');
+		expect(lines(view)).toEqual(['<img src="x" onerror="alert(1)">']);
 	});
 
 	it('typing updates the data verbatim and requests a save', async () => {
-		const view = makeView();
+		const view = makeView('source');
 		open(view, 'h2. x');
-		view.setMode('source');
-		type(editor(view)!, 'h2. Новый\n\nтекст  \n');
+		type(editor(view)!, 0, 5, 'h2. Новый\n\nтекст  \n');
 		expect(view.getViewData()).toBe('h2. Новый\n\nтекст  \n');
 		expect(view.saveRequests).toBe(1);
 		await view.save();
 		expect(view.savedData).toEqual(['h2. Новый\n\nтекст  \n']);
 	});
 
-	it('keeps CRLF line breaks after an edit', () => {
-		const view = makeView();
+	it('keeps CRLF line breaks when typing a new line', () => {
+		const view = makeView('source');
 		view.setViewData('a\r\nb', true);
-		view.setMode('source');
-		type(editor(view)!, 'a\nb\nc');
+		const cm = editor(view)!;
+		type(cm, 3, 3, cm.state.lineBreak + 'c');
 		expect(view.getViewData()).toBe('a\r\nb\r\nc');
 	});
 
-	it('does not touch the data when the source is only viewed', () => {
-		const view = makeView();
-		view.setViewData('\uFEFFa\r\nb  ', true);
+	it('pasted text takes the line breaks of the file', () => {
+		const view = makeView('source');
+		view.setViewData('a\r\nb', true);
+		editor(view)!.dispatch({ changes: { from: 3, insert: '\nc\r\nd\re' }, userEvent: 'input.paste' });
+		expect(view.getViewData()).toBe('a\r\nb\r\nc\r\nd\r\ne');
+		const lf = makeView('source');
+		lf.setViewData('a', true);
+		editor(lf)!.dispatch({ changes: { from: 1, insert: '\r\nb' }, userEvent: 'input.paste' });
+		expect(lf.getViewData()).toBe('a\nb');
+	});
+
+	it('keeps a stray line break of the other kind byte for byte', () => {
+		const view = makeView('source');
+		open(view, 'a\r\nb\nc\rd');
+		type(editor(view)!, 0, 0, '!');
+		expect(view.getViewData()).toBe('!a\r\nb\nc\rd');
+	});
+
+	it('does not touch the data when the editor is only viewed', () => {
+		const view = makeView('live');
+		view.setViewData('\uFEFFh2. a\r\nb  ', true);
 		view.setMode('source');
 		view.setMode('preview');
-		expect(view.getViewData()).toBe('\uFEFFa\r\nb  ');
+		expect(view.getViewData()).toBe('\uFEFFh2. a\r\nb  ');
 		expect(view.saveRequests).toBe(0);
 	});
 
 	it('preview shows the edited text after switching back', () => {
-		const view = makeView();
+		const view = makeView('source');
 		view.setViewData('h2. old', true);
-		view.setMode('source');
-		type(editor(view)!, 'h2. new');
+		type(editor(view)!, 4, 7, 'new');
 		view.setMode('preview');
 		expect(preview(view)?.querySelector('h2')?.textContent).toBe('new');
 	});
 
-	it('keeps the textarea and caret when our own save comes back from disk', async () => {
-		const view = makeView();
+	it('keeps the editor and caret when our own save comes back from disk', async () => {
+		const view = makeView('source');
 		open(view, 'abcdef');
-		view.setMode('source');
-		const el = editor(view)!;
-		type(el, 'abcdefg');
-		el.setSelectionRange(3, 3);
+		const cm = editor(view)!;
+		type(cm, 6, 6, 'g');
+		cm.dispatch({ selection: { anchor: 3 } });
 		await view.save();
 		changeOnDisk(view, 'abcdefg');
-		expect(editor(view)).toBe(el);
-		expect(el.selectionStart).toBe(3);
+		expect(editor(view)).toBe(cm);
+		expect(cm.state.selection.main.head).toBe(3);
 	});
 
 	it('shows a change made on disk while editing and keeps the caret', () => {
-		const view = makeView();
+		const view = makeView('source');
 		open(view, 'abcdef');
-		view.setMode('source');
-		const el = editor(view)!;
-		el.setSelectionRange(2, 4);
+		const cm = editor(view)!;
+		cm.dispatch({ selection: { anchor: 2, head: 4 } });
 		changeOnDisk(view, 'abcdefgh');
-		expect(editor(view)).toBe(el);
-		expect(el.value).toBe('abcdefgh');
-		expect([el.selectionStart, el.selectionEnd]).toEqual([2, 4]);
+		expect(editor(view)).toBe(cm);
+		expect(cm.state.doc.toString()).toBe('abcdefgh');
+		expect([cm.state.selection.main.anchor, cm.state.selection.main.head]).toEqual([2, 4]);
 		changeOnDisk(view, 'ab');
-		expect(el.value).toBe('ab');
-		expect([el.selectionStart, el.selectionEnd]).toEqual([2, 2]);
+		expect(cm.state.doc.toString()).toBe('ab');
+		expect(cm.state.selection.main.head).toBe(2);
 		expect(view.getViewData()).toBe('ab');
+		expect(view.saveRequests).toBe(0);
+	});
+
+	it('undo reverts the user\'s own edits but not a change made on disk', () => {
+		const view = makeView('source');
+		open(view, 'one\ntwo');
+		const cm = editor(view)!;
+		type(cm, 0, 0, 'my ');
+		changeOnDisk(view, 'my one\ntwo\nthree');
+		undo(cm);
+		expect(view.getViewData()).toBe('one\ntwo\nthree');
 	});
 
 	it('typing after a change on disk builds on the new text, not the old one', async () => {
-		const view = makeView();
+		const view = makeView('source');
 		open(view, 'old text');
-		view.setMode('source');
 		changeOnDisk(view, 'text from Claude');
-		const el = editor(view)!;
-		type(el, el.value + '!');
+		const cm = editor(view)!;
+		type(cm, cm.state.doc.length, cm.state.doc.length, '!');
 		await view.save();
 		expect(view.savedData).toEqual(['text from Claude!']);
+	});
+
+	it('takes a change on disk that switches the file between LF and CRLF', () => {
+		const view = makeView('source');
+		open(view, 'a\nb');
+		changeOnDisk(view, 'a\r\nb\r\nc');
+		const cm = editor(view)!;
+		type(cm, cm.state.doc.length, cm.state.doc.length, cm.state.lineBreak + 'd');
+		expect(view.getViewData()).toBe('a\r\nb\r\nc\r\nd');
 	});
 
 	it('shows a change made on disk in the preview', () => {
@@ -257,27 +301,26 @@ describe('TextileView source mode', () => {
 		expect(preview(view)?.querySelector('h2')?.textContent).toBe('new');
 	});
 
-	it('stays in source mode with a fresh textarea when another file opens in the tab', () => {
-		const view = makeView();
+	it('stays in its editing mode with a fresh editor when another file opens in the tab', () => {
+		const view = makeView('source');
 		view.setViewData('first', true);
-		view.setMode('source');
 		const first = editor(view);
 		view.setViewData('second', true);
 		expect(view.mode).toBe('source');
 		expect(editor(view)).not.toBe(first);
-		expect(editor(view)?.value).toBe('second');
+		expect(view.contentEl.querySelectorAll('.cm-editor')).toHaveLength(1);
+		expect(editor(view)?.state.doc.toString()).toBe('second');
 	});
 
 	it('does not save between clear() and the next file', async () => {
-		const view = makeView();
+		const view = makeView('source');
 		open(view, 'draft');
-		view.setMode('source');
-		type(editor(view)!, 'draft edited');
+		type(editor(view)!, 5, 5, ' edited');
 		await view.save(true); // tab switches to another file: Obsidian saves, then clears
 		await view.save(); // a requestSave() that fired late
 		expect(view.savedData).toEqual(['draft edited']);
 		open(view, 'next');
-		type(editor(view)!, 'next edited');
+		type(editor(view)!, 4, 4, ' edited');
 		await view.save();
 		expect(view.savedData).toEqual(['draft edited', 'next edited']);
 	});
@@ -290,6 +333,41 @@ describe('TextileView source mode', () => {
 	});
 });
 
+describe('TextileView live preview and source', () => {
+	it('switching between live preview and source keeps the editor, caret and undo history', () => {
+		const view = makeView('live');
+		open(view, 'some *bold* text');
+		const cm = editor(view)!;
+		type(cm, 0, 0, 'x');
+		cm.dispatch({ selection: { anchor: 3 } });
+		view.toggleLivePreview();
+		expect(view.mode).toBe('source');
+		expect(editor(view)).toBe(cm);
+		expect(cm.state.selection.main.head).toBe(3);
+		expect(view.contentEl.querySelector('.is-live-preview')).toBeNull();
+		undo(cm);
+		expect(view.getViewData()).toBe('some *bold* text');
+		view.toggleLivePreview();
+		expect(view.mode).toBe('live');
+		expect(view.contentEl.querySelector('.is-live-preview')).not.toBeNull();
+	});
+
+	it('toggling live preview does nothing in reading mode', () => {
+		const view = makeView();
+		view.toggleLivePreview();
+		expect(view.mode).toBe('preview');
+	});
+
+	it('styles the editor like Obsidian\'s markdown editor', () => {
+		const view = makeView('live');
+		view.setViewData('x', true);
+		const host = view.contentEl.querySelector('.redmine-textile-editor');
+		expect(host?.classList).toContain('markdown-source-view');
+		expect(host?.classList).toContain('mod-cm6');
+		expect(host?.classList).toContain('is-live-preview');
+	});
+});
+
 describe('TextileView mode memory', () => {
 	it('stores the mode in the view state next to the base state', () => {
 		const view = makeView();
@@ -298,13 +376,17 @@ describe('TextileView mode memory', () => {
 		expect(view.getState()).toEqual({ file: null, mode: 'source' });
 	});
 
-	it('restores source mode from the view state', async () => {
+	it('restores each mode from the view state', async () => {
 		const view = makeView();
 		view.setViewData('h2. x', true);
 		await view.setState({ file: 'a.textile', mode: 'source' }, { history: false });
 		expect(view.mode).toBe('source');
-		expect(editor(view)?.value).toBe('h2. x');
-		expect(modeButton(view).getAttribute('aria-label')).toBe('Show preview');
+		expect(editor(view)?.state.doc.toString()).toBe('h2. x');
+		expect(modeButton(view).getAttribute('aria-label')).toBe('Read');
+		await view.setState({ file: 'a.textile', mode: 'preview' }, { history: false });
+		expect(view.mode).toBe('preview');
+		await view.setState({ file: 'a.textile', mode: 'live' }, { history: false });
+		expect(view.mode).toBe('live');
 	});
 
 	it('ignores a missing or unknown mode in the view state', async () => {
@@ -355,7 +437,7 @@ describe('TextileView Redmine markup', () => {
 		expect(details[1]!.textContent).toContain('b, edited');
 	});
 
-	it('opens collapses closed after switching back from source', () => {
+	it('opens collapses closed after switching back from editing', () => {
 		const view = makeView();
 		open(view, '{{collapse(A)\na\n}}');
 		preview(view)!.querySelector('details')!.open = true;
@@ -374,7 +456,7 @@ describe('TextileView Redmine markup', () => {
 		expect(error).toHaveBeenCalled();
 		expect(view.getViewData()).toBe(text);
 		view.setMode('source');
-		expect(editor(view)?.value).toBe(text);
+		expect(editor(view)?.state.sliceDoc()).toBe(text);
 	});
 
 	it('clicking a collapse title does not count as a link click', () => {
